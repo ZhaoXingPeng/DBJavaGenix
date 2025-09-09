@@ -1,0 +1,60 @@
+# DBJavaGenix Configuration
+
+# Database connection settings
+database:
+  type: mysql  # mysql, postgresql, sqlite
+  host: localhost
+  port: 3306
+  database: test_db
+  username: root
+  password: password
+  charset: utf8mb4
+
+# AI service configuration
+ai:
+  provider: openai  # openai, qianwen, wenxin, local
+  api_key: "your-api-key-here"
+  model: "gpt-3.5-turbo"
+  temperature: 0.1
+  max_tokens: 2000
+
+# Code generation settings
+generation:
+  output_dir: "./generated"
+  package_name: "com.example.demo"
+  code_style: spring_boot  # traditional, ddd, spring_boot
+  template_engine: mustache  # mustache, velocity
+  mapping_tool: mapstruct  # mapstruct, dozer, manual
+  author: "ZXP"
+  
+  # Entity settings
+  entity_suffix: ""
+  use_lombok: true
+  use_jpa: true
+  
+  # DAO settings
+  dao_suffix: "Mapper"
+  use_mybatis_plus: true
+  
+  # Service settings
+  service_suffix: "Service"
+  service_impl_suffix: "ServiceImpl"
+  
+  # Controller settings
+  controller_suffix: "Controller"
+  use_swagger: true
+  
+  # Additional options
+  generate_dto: true
+  generate_vo: true
+  generate_tests: false
+  
+  # MapStruct configuration
+  mapstruct_component_model: "spring"
+  mapstruct_unmapped_target_policy: "IGNORE"
+  generate_mappers: true
+
+# Application settings
+debug: false
+log_level: INFO
+log_file: null

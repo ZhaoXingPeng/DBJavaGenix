@@ -1,0 +1,225 @@
+package {{controllerPackage}};
+
+import {{entityPackage}}.{{className}};
+import {{servicePackage}}.{{className}}Service;
+{{#generateDto}}
+import {{dtoPackage}}.{{className}}DTO;
+{{/generateDto}}
+{{#generateVo}}
+import {{voPackage}}.{{className}}VO;
+{{/generateVo}}
+{{#hasSpringData}}
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+{{/hasSpringData}}
+{{^hasSpringData}}
+import java.util.List;
+{{/hasSpringData}}
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
+
+{{#hasJavax}}
+import javax.annotation.Resource;
+import javax.validation.Valid;
+{{#useSwagger}}
+{{#hasSwagger2}}
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+{{/hasSwagger2}}
+{{/useSwagger}}
+{{/hasJavax}}
+
+{{#hasJakarta}}
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
+{{#useSwagger}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+{{/hasSpringDoc}}
+{{#hasSwagger2}}
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+{{/hasSwagger2}}
+{{/useSwagger}}
+{{/hasJakarta}}
+
+/**
+ * {{comment}}({{tableName}})表控制层
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+@RestController
+@RequestMapping("/api/{{entityNameLowerCase}}")
+@Validated
+{{#useSwagger}}
+{{#hasSwagger2}}
+@Api(tags = "{{comment}}管理")
+{{/hasSwagger2}}
+{{#hasSpringDoc}}
+@Tag(name = "{{comment}}管理")
+{{/hasSpringDoc}}
+{{/useSwagger}}
+public class {{className}}Controller {
+    
+    /**
+     * 服务对象
+     */
+    @Resource
+    private {{className}}Service {{entityNameLowerCase}}Service;
+
+    /**
+     * 分页查询
+     *
+     * @param {{entityNameLowerCase}} 筛选条件
+     {{#hasSpringData}}
+     * @param pageRequest 分页对象
+     {{/hasSpringData}}
+     {{^hasSpringData}}
+     * @param offset 偏移量
+     * @param limit 限制数量
+     {{/hasSpringData}}
+     * @return 查询结果
+     */
+    @GetMapping
+    {{#useSwagger}}
+    {{#hasSwagger2}}
+    @ApiOperation("分页查询{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "分页查询{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    {{#hasSpringData}}
+    public ResponseEntity<Page<{{#generateVo}}{{className}}VO{{/generateVo}}{{^generateVo}}{{className}}{{/generateVo}}>> queryByPage(
+            {{#generateDto}}{{className}}DTO{{/generateDto}}{{^generateDto}}{{className}}{{/generateDto}} {{entityNameLowerCase}}, 
+            PageRequest pageRequest) {
+        return ResponseEntity.ok(this.{{entityNameLowerCase}}Service.queryByPage({{entityNameLowerCase}}, pageRequest));
+    }
+    {{/hasSpringData}}
+    {{^hasSpringData}}
+    public ResponseEntity<List<{{#generateVo}}{{className}}VO{{/generateVo}}{{^generateVo}}{{className}}{{/generateVo}}>> queryByPage(
+            {{#generateDto}}{{className}}DTO{{/generateDto}}{{^generateDto}}{{className}}{{/generateDto}} {{entityNameLowerCase}},
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(this.{{entityNameLowerCase}}Service.queryByPage({{entityNameLowerCase}}, offset, limit));
+    }
+    {{/hasSpringData}}
+
+    /**
+     * 通过主键查询单条数据
+     *
+     * @param {{primaryKeyName}} 主键
+     * @return 单条数据
+     */
+    @GetMapping("/{{{primaryKeyName}}}")
+    {{#useSwagger}}
+    {{#hasSwagger2}}
+    @ApiOperation("根据ID查询{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "根据ID查询{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<{{#generateVo}}{{className}}VO{{/generateVo}}{{^generateVo}}{{className}}{{/generateVo}}> queryById(
+            {{#useSwagger}}
+            {{#hasSwagger2}}
+            @ApiParam("主键ID") 
+            {{/hasSwagger2}}
+            {{#hasSpringDoc}}
+            @Parameter(description = "主键ID") 
+            {{/hasSpringDoc}}
+            {{/useSwagger}}
+            @PathVariable("{{primaryKeyName}}") {{primaryKeyType}} {{primaryKeyName}}) {
+        return ResponseEntity.ok(this.{{entityNameLowerCase}}Service.queryById({{primaryKeyName}}));
+    }
+
+    /**
+     * 新增数据
+     *
+     * @param {{entityNameLowerCase}} 实体
+     * @return 新增结果
+     */
+    @PostMapping
+    {{#useSwagger}}
+    {{#hasSwagger2}}
+    @ApiOperation("新增{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "新增{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<{{#generateVo}}{{className}}VO{{/generateVo}}{{^generateVo}}{{className}}{{/generateVo}}> add(
+            {{#useSwagger}}
+            {{#hasSwagger2}}
+            @ApiParam("{{comment}}信息") 
+            {{/hasSwagger2}}
+            {{#hasSpringDoc}}
+            @Parameter(description = "{{comment}}信息") 
+            {{/hasSpringDoc}}
+            {{/useSwagger}}
+            @RequestBody @Valid {{#generateDto}}{{className}}DTO{{/generateDto}}{{^generateDto}}{{className}}{{/generateDto}} {{entityNameLowerCase}}) {
+        return ResponseEntity.ok(this.{{entityNameLowerCase}}Service.insert({{entityNameLowerCase}}));
+    }
+
+    /**
+     * 编辑数据
+     *
+     * @param {{entityNameLowerCase}} 实体
+     * @return 编辑结果
+     */
+    @PutMapping
+    {{#useSwagger}}
+    {{#hasSwagger2}}
+    @ApiOperation("更新{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "更新{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<{{#generateVo}}{{className}}VO{{/generateVo}}{{^generateVo}}{{className}}{{/generateVo}}> edit(
+            {{#useSwagger}}
+            {{#hasSwagger2}}
+            @ApiParam("{{comment}}信息") 
+            {{/hasSwagger2}}
+            {{#hasSpringDoc}}
+            @Parameter(description = "{{comment}}信息") 
+            {{/hasSpringDoc}}
+            {{/useSwagger}}
+            @RequestBody @Valid {{#generateDto}}{{className}}DTO{{/generateDto}}{{^generateDto}}{{className}}{{/generateDto}} {{entityNameLowerCase}}) {
+        return ResponseEntity.ok(this.{{entityNameLowerCase}}Service.update({{entityNameLowerCase}}));
+    }
+
+    /**
+     * 删除数据
+     *
+     * @param {{primaryKeyName}} 主键
+     * @return 删除是否成功
+     */
+    @DeleteMapping("/{{{primaryKeyName}}}")
+    {{#useSwagger}}
+    {{#hasSwagger2}}
+    @ApiOperation("删除{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "删除{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<Boolean> deleteById(
+            {{#useSwagger}}
+            {{#hasSwagger2}}
+            @ApiParam("主键ID") 
+            {{/hasSwagger2}}
+            {{#hasSpringDoc}}
+            @Parameter(description = "主键ID") 
+            {{/hasSpringDoc}}
+            {{/useSwagger}}
+            @PathVariable("{{primaryKeyName}}") {{primaryKeyType}} {{primaryKeyName}}) {
+        return ResponseEntity.ok(this.{{entityNameLowerCase}}Service.deleteById({{primaryKeyName}}));
+    }
+}

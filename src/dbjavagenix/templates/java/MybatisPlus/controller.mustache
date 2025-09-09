@@ -1,0 +1,117 @@
+package {{controllerPackage}};
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.api.ApiController;
+import com.baomidou.mybatisplus.extension.api.R;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import {{entityPackage}}.{{className}};
+import {{servicePackage}}.{{className}}Service;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
+
+import javax.annotation.Resource;
+import javax.validation.Valid;
+import java.io.Serializable;
+import java.util.List;
+{{#useSwagger}}
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+{{/useSwagger}}
+
+/**
+ * {{comment}}({{tableName}})表控制层
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+@Validated
+@RestController
+@RequestMapping("/api/{{entityNameLowerCase}}")
+{{#useSwagger}}
+@Api(tags = "{{comment}}管理")
+{{/useSwagger}}
+public class {{className}}Controller extends ApiController {
+    
+    /**
+     * 服务对象
+     */
+    @Resource
+    private {{className}}Service {{entityNameLowerCase}}Service;
+
+    /**
+     * 分页查询所有数据
+     *
+     * @param page 分页对象
+     * @param {{entityNameLowerCase}} 查询实体
+     * @return 所有数据
+     */
+    @GetMapping
+    {{#useSwagger}}
+    @ApiOperation("分页查询{{comment}}")
+    {{/useSwagger}}
+    public R selectAll(
+            {{#useSwagger}}@ApiParam("分页对象") {{/useSwagger}}Page<{{className}}> page, 
+            {{#useSwagger}}@ApiParam("查询条件") {{/useSwagger}}{{className}} {{entityNameLowerCase}}) {
+        return success(this.{{entityNameLowerCase}}Service.page(page, new QueryWrapper<>({{entityNameLowerCase}})));
+    }
+
+    /**
+     * 通过主键查询单条数据
+     *
+     * @param id 主键
+     * @return 单条数据
+     */
+    @GetMapping("{id}")
+    {{#useSwagger}}
+    @ApiOperation("根据ID查询{{comment}}")
+    {{/useSwagger}}
+    public R selectOne({{#useSwagger}}@ApiParam("主键ID") {{/useSwagger}}@PathVariable Serializable id) {
+        return success(this.{{entityNameLowerCase}}Service.getById(id));
+    }
+
+    /**
+     * 新增数据
+     *
+     * @param {{entityNameLowerCase}} 实体对象
+     * @return 新增结果
+     */
+    @PostMapping
+    {{#useSwagger}}
+    @ApiOperation("新增{{comment}}")
+    {{/useSwagger}}
+    public R insert(
+            {{#useSwagger}}@ApiParam("{{comment}}信息") {{/useSwagger}}@Valid @RequestBody {{className}} {{entityNameLowerCase}}) {
+        return success(this.{{entityNameLowerCase}}Service.save({{entityNameLowerCase}}));
+    }
+
+    /**
+     * 修改数据
+     *
+     * @param {{entityNameLowerCase}} 实体对象
+     * @return 修改结果
+     */
+    @PutMapping
+    {{#useSwagger}}
+    @ApiOperation("更新{{comment}}")
+    {{/useSwagger}}
+    public R update(
+            {{#useSwagger}}@ApiParam("{{comment}}信息") {{/useSwagger}}@Valid @RequestBody {{className}} {{entityNameLowerCase}}) {
+        return success(this.{{entityNameLowerCase}}Service.updateById({{entityNameLowerCase}}));
+    }
+
+    /**
+     * 删除数据
+     *
+     * @param idList 主键结合
+     * @return 删除结果
+     */
+    @DeleteMapping
+    {{#useSwagger}}
+    @ApiOperation("批量删除{{comment}}")
+    {{/useSwagger}}
+    public R delete(
+            {{#useSwagger}}@ApiParam("主键ID列表") {{/useSwagger}}@RequestParam("idList") List<{{primaryKeyType}}> idList) {
+        return success(this.{{entityNameLowerCase}}Service.removeByIds(idList));
+    }
+}

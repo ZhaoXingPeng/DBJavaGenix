@@ -1,0 +1,50 @@
+package {{serviceImplPackage}};
+
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import {{daoPackage}}.{{className}}Dao;
+import {{entityPackage}}.{{className}};
+import {{servicePackage}}.{{className}}Service;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+import java.util.List;
+
+/**
+ * {{comment}}({{tableName}})表服务实现类
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+@Service("{{entityNameLowerCase}}Service")
+@Transactional(rollbackFor = Exception.class)
+public class {{className}}ServiceImpl extends ServiceImpl<{{className}}Dao, {{className}}> implements {{className}}Service {
+
+    /**
+     * 批量新增数据
+     *
+     * @param entities 实体对象列表
+     * @return 影响行数
+     */
+    @Override
+    public int insertBatch(List<{{className}}> entities) {
+        if (CollectionUtils.isEmpty(entities)) {
+            return 0;
+        }
+        return this.baseMapper.insertBatch(entities);
+    }
+
+    /**
+     * 批量新增或按主键更新数据
+     *
+     * @param entities 实体对象列表
+     * @return 影响行数
+     */
+    @Override
+    public int insertOrUpdateBatch(List<{{className}}> entities) {
+        if (CollectionUtils.isEmpty(entities)) {
+            return 0;
+        }
+        return this.baseMapper.insertOrUpdateBatch(entities);
+    }
+
+}

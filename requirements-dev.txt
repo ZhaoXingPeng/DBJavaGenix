@@ -1,0 +1,35 @@
+# DBJavaGenix 开发环境依赖
+# 包含测试、代码检查、文档生成等开发工具
+
+# 继承核心依赖
+-r requirements-min.txt
+
+# 测试框架
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# 代码质量
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+pre-commit>=3.0.0
+
+# 文档工具
+mkdocs>=1.5.0
+mkdocs-material>=9.0.0
+mkdocstrings[python]>=0.22.0
+
+# 开发工具
+ipython>=8.0.0
+jupyter>=1.0.0
+
+# AI服务（开发测试用）
+openai>=1.0.0
+
+# 额外数据库驱动（开发测试）
+psycopg2-binary>=2.9.0
+
+# 性能分析
+memory-profiler>=0.60.0
+line-profiler>=4.0.0

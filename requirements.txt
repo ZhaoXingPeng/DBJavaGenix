@@ -1,0 +1,135 @@
+# DBJavaGenix - AI增强的Java代码生成器
+# 基于MCP服务架构的数据库驱动代码生成工具
+# 作者: ZXP (2638265504@qq.com)
+# 项目地址: https://github.com/dbjavagenix/dbjavagenix
+
+# ==================================================
+# 核心依赖 (Core Dependencies)
+# ==================================================
+
+# MCP框架 - Model Context Protocol
+mcp>=1.0.0
+
+# 数据验证和设置管理
+pydantic>=2.0.0
+
+# 数据库ORM和连接
+sqlalchemy>=2.0.0
+
+# 数据库驱动
+pymysql>=1.0.0              # MySQL连接器
+psycopg2-binary>=2.9.0      # PostgreSQL连接器
+
+# 模板引擎
+pystache>=0.6.0             # Mustache模板引擎，用于Java代码生成
+
+# 异步文件操作
+aiofiles>=23.0.0
+
+# CLI框架
+typer>=0.9.0                # 现代Python CLI框架
+rich>=13.0.0                # 富文本终端输出
+
+# AI服务集成
+openai>=1.0.0               # OpenAI API客户端
+
+# HTTP客户端
+httpx>=0.24.0               # 异步HTTP客户端
+
+# 环境变量管理
+python-dotenv>=1.0.0
+
+# ==================================================
+# 开发依赖 (Development Dependencies)
+# ==================================================
+
+# 测试框架
+pytest>=7.0.0
+pytest-asyncio>=0.21.0      # 异步测试支持
+pytest-cov>=4.0.0           # 测试覆盖率
+
+# 代码格式化和检查
+black>=23.0.0               # 代码格式化
+flake8>=6.0.0               # 代码风格检查
+mypy>=1.0.0                 # 静态类型检查
+
+# Git钩子
+pre-commit>=3.0.0
+
+# ==================================================
+# 文档依赖 (Documentation Dependencies)
+# ==================================================
+
+# 文档生成
+mkdocs>=1.5.0
+mkdocs-material>=9.0.0
+mkdocstrings[python]>=0.22.0
+
+# ==================================================
+# 其他可能需要的依赖 (Additional Dependencies)
+# ==================================================
+
+# YAML配置支持
+PyYAML>=6.0
+
+# 日志处理
+loguru>=0.7.0
+
+# 路径处理
+pathlib2>=2.3.7; python_version<"3.4"
+
+# JSON处理增强
+orjson>=3.8.0
+
+# 配置文件解析
+configparser>=5.3.0
+
+# 时间处理
+python-dateutil>=2.8.0
+
+# 字符串处理
+Jinja2>=3.1.0               # 备用模板引擎
+
+# 数据库连接池
+SQLAlchemy-Utils>=0.41.0
+
+# 加密支持
+cryptography>=40.0.0
+
+# ==================================================
+# 兼容性说明 (Compatibility Notes)
+# ==================================================
+
+# Python版本要求: >=3.9
+# 支持的数据库:
+#   - MySQL 5.7/8.0 (pymysql)
+#   - PostgreSQL (psycopg2-binary)
+#   - SQLite (内置)
+#   - SQL Server (pyodbc - 可选)
+#   - Oracle (cx_Oracle - 可选)
+
+# 可选的额外数据库驱动:
+# pyodbc>=4.0.0              # SQL Server
+# cx_Oracle>=8.3.0           # Oracle
+
+# ==================================================
+# 安装说明 (Installation Instructions)
+# ==================================================
+
+# 1. 基础安装:
+#    pip install -r requirements.txt
+
+# 2. 开发环境安装:
+#    pip install -r requirements.txt
+#    pip install -e ".[dev]"
+
+# 3. 使用uv安装 (推荐):
+#    uv sync --extra dev
+
+# ==================================================
+# 版本锁定 (Version Pinning)
+# ==================================================
+
+# 注意: 这些是最低版本要求
+# 生产环境建议使用 pip freeze > requirements-lock.txt
+# 来锁定具体版本

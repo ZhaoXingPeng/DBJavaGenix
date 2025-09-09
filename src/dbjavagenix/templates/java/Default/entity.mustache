@@ -1,0 +1,57 @@
+package {{entityPackage}};
+
+{{#imports}}
+import {{.}};
+{{/imports}}
+import java.io.Serializable;
+{{#useLombok}}
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+{{/useLombok}}
+{{#useSwagger}}
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+{{/useSwagger}}
+
+/**
+ * {{comment}}({{tableName}})实体类
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+{{#useLombok}}
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+{{/useLombok}}
+{{#useSwagger}}
+@ApiModel(description = "{{comment}}")
+{{/useSwagger}}
+public class {{className}} implements Serializable {
+    private static final long serialVersionUID = {{serialVersionUID}}L;
+
+{{#columns}}
+    /**
+     * {{comment}}
+     */
+    {{#useSwagger}}
+    @ApiModelProperty(value = "{{comment}}", required = {{^nullable}}true{{/nullable}}{{#nullable}}false{{/nullable}})
+    {{/useSwagger}}
+    private {{javaType}} {{javaName}};
+
+{{/columns}}
+{{^useLombok}}
+    // Getters and Setters
+{{#columns}}
+    public {{javaType}} get{{capitalizedJavaName}}() {
+        return {{javaName}};
+    }
+
+    public void set{{capitalizedJavaName}}({{javaType}} {{javaName}}) {
+        this.{{javaName}} = {{javaName}};
+    }
+
+{{/columns}}
+{{/useLombok}}
+}

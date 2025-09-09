@@ -1,0 +1,68 @@
+package {{entityPackage}};
+
+{{#imports}}
+import {{.}};
+{{/imports}}
+import com.baomidou.mybatisplus.extension.activerecord.Model;
+import java.io.Serializable;
+{{#useLombok}}
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.experimental.Accessors;
+{{/useLombok}}
+{{#useSwagger}}
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+{{/useSwagger}}
+
+/**
+ * {{comment}}({{tableName}})表实体类
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+{{#useLombok}}
+@Data
+@EqualsAndHashCode(callSuper = false)
+@Accessors(chain = true)
+{{/useLombok}}
+{{#useSwagger}}
+@ApiModel(value = "{{className}}对象", description = "{{comment}}")
+{{/useSwagger}}
+@SuppressWarnings("serial")
+public class {{className}} extends Model<{{className}}> {
+
+{{#columns}}
+    /**
+     * {{comment}}
+     */
+    {{#useSwagger}}
+    @ApiModelProperty(value = "{{comment}}")
+    {{/useSwagger}}
+    private {{javaType}} {{javaName}};
+
+{{/columns}}
+{{^useLombok}}
+    // Getters and Setters
+{{#columns}}
+    public {{javaType}} get{{capitalizedJavaName}}() {
+        return {{javaName}};
+    }
+
+    public void set{{capitalizedJavaName}}({{javaType}} {{javaName}}) {
+        this.{{javaName}} = {{javaName}};
+    }
+
+{{/columns}}
+{{/useLombok}}
+
+    /**
+     * 获取主键值
+     *
+     * @return 主键值
+     */
+    @Override
+    public Serializable pkVal() {
+        return this.{{primaryKeyName}};
+    }
+}

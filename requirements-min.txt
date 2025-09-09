@@ -1,0 +1,31 @@
+# DBJavaGenix 最小运行时依赖
+# 仅包含核心功能所需的必要依赖
+
+# MCP框架
+mcp>=1.0.0
+
+# 数据验证
+pydantic>=2.0.0
+
+# 数据库
+sqlalchemy>=2.0.0
+pymysql>=1.0.0
+
+# 模板引擎
+pystache>=0.6.0
+
+# 异步支持
+aiofiles>=23.0.0
+
+# CLI界面
+typer>=0.9.0
+rich>=13.0.0
+
+# HTTP客户端
+httpx>=0.24.0
+
+# 配置管理
+python-dotenv>=1.0.0
+
+# YAML支持
+PyYAML>=6.0

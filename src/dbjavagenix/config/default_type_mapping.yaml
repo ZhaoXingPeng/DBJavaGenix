@@ -1,0 +1,714 @@
+# DBJavaGenix 默认数据类型映射配置
+
+## 配置说明
+
+本配置文件定义了数据库字段类型到 Java 数据类型的默认映射规则。当用户未指定特定字段的 Java 类型时，系统将自动使用此配置进行类型转换。
+
+配置原则：
+- 基本类型（Integer、String等）直接使用类名，无需包路径
+- 复杂类型使用简短类名，在imports中指定完整包路径
+- 自动生成对应的 imports 列表供模板使用
+
+## 数据类型映射规则
+
+### MySQL 数据类型映射
+
+```yaml
+mysql:
+  # 数值类型
+  numeric:
+    # 整数类型 - 使用基本包装类型
+    TINYINT: 
+      java_type: "Integer"
+      imports: []
+    TINYINT_UNSIGNED: 
+      java_type: "Integer"
+      imports: []
+    SMALLINT: 
+      java_type: "Integer"
+      imports: []
+    SMALLINT_UNSIGNED: 
+      java_type: "Integer"
+      imports: []
+    MEDIUMINT: 
+      java_type: "Integer"
+      imports: []
+    MEDIUMINT_UNSIGNED: 
+      java_type: "Long"
+      imports: []
+    INT: 
+      java_type: "Integer"
+      imports: []
+    INTEGER: 
+      java_type: "Integer"
+      imports: []
+    INT_UNSIGNED: 
+      java_type: "Long"
+      imports: []
+    INTEGER_UNSIGNED: 
+      java_type: "Long"
+      imports: []
+    BIGINT: 
+      java_type: "Long"
+      imports: []
+    BIGINT_UNSIGNED: 
+      java_type: "BigInteger"
+      imports: ["java.math.BigInteger"]
+    
+    # 小数类型 - 需要导入包
+    DECIMAL: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    NUMERIC: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    FLOAT: 
+      java_type: "Float"
+      imports: []
+    DOUBLE: 
+      java_type: "Double"
+      imports: []
+    REAL: 
+      java_type: "Double"
+      imports: []
+    
+    # 位类型
+    BIT: 
+      java_type: "Boolean"
+      imports: []
+    BIT_M: 
+      java_type: "byte[]"
+      imports: []
+
+  # 字符串类型 - 基本类型，无需导入
+  string:
+    CHAR: 
+      java_type: "String"
+      imports: []
+    VARCHAR: 
+      java_type: "String"
+      imports: []
+    TINYTEXT: 
+      java_type: "String"
+      imports: []
+    TEXT: 
+      java_type: "String"
+      imports: []
+    MEDIUMTEXT: 
+      java_type: "String"
+      imports: []
+    LONGTEXT: 
+      java_type: "String"
+      imports: []
+    ENUM: 
+      java_type: "String"
+      imports: []
+    SET: 
+      java_type: "String"
+      imports: []
+    
+  # 二进制类型
+  binary:
+    BINARY: 
+      java_type: "byte[]"
+      imports: []
+    VARBINARY: 
+      java_type: "byte[]"
+      imports: []
+    TINYBLOB: 
+      java_type: "byte[]"
+      imports: []
+    BLOB: 
+      java_type: "byte[]"
+      imports: []
+    MEDIUMBLOB: 
+      java_type: "byte[]"
+      imports: []
+    LONGBLOB: 
+      java_type: "byte[]"
+      imports: []
+    
+  # 日期时间类型 - 需要导入java.time包
+  datetime:
+    DATE: 
+      java_type: "LocalDate"
+      imports: ["java.time.LocalDate"]
+    TIME: 
+      java_type: "LocalTime"
+      imports: ["java.time.LocalTime"]
+    DATETIME: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    TIMESTAMP: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    YEAR: 
+      java_type: "Integer"
+      imports: []
+    
+  # JSON 类型
+  json:
+    JSON: 
+      java_type: "String"
+      imports: []
+      # 备选方案: JsonNode (需要Jackson)
+      # java_type: "JsonNode"
+      # imports: ["com.fasterxml.jackson.databind.JsonNode"]
+    
+  # 空间数据类型 - 使用Object占位，需要JTS库
+  spatial:
+    GEOMETRY: 
+      java_type: "Object"
+      imports: []
+      comment: "需要JTS库: com.vividsolutions.jts.geom.Geometry"
+    POINT: 
+      java_type: "Object"
+      imports: []
+      comment: "需要JTS库: com.vividsolutions.jts.geom.Point"
+    LINESTRING: 
+      java_type: "Object"
+      imports: []
+    POLYGON: 
+      java_type: "Object"
+      imports: []
+    MULTIPOINT: 
+      java_type: "Object"
+      imports: []
+    MULTILINESTRING: 
+      java_type: "Object"
+      imports: []
+    MULTIPOLYGON: 
+      java_type: "Object"
+      imports: []
+    GEOMETRYCOLLECTION: 
+      java_type: "Object"
+      imports: []
+    
+  # 其他类型
+  other:
+    BOOLEAN: 
+      java_type: "Boolean"
+      imports: []
+```
+
+### PostgreSQL 数据类型映射
+
+```yaml
+postgresql:
+  numeric:
+    SMALLINT: 
+      java_type: "Integer"
+      imports: []
+    INT2: 
+      java_type: "Integer"
+      imports: []
+    INTEGER: 
+      java_type: "Integer"
+      imports: []
+    INT: 
+      java_type: "Integer"
+      imports: []
+    INT4: 
+      java_type: "Integer"
+      imports: []
+    BIGINT: 
+      java_type: "Long"
+      imports: []
+    INT8: 
+      java_type: "Long"
+      imports: []
+    
+    DECIMAL: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    NUMERIC: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    REAL: 
+      java_type: "Float"
+      imports: []
+    FLOAT4: 
+      java_type: "Float"
+      imports: []
+    DOUBLE_PRECISION: 
+      java_type: "Double"
+      imports: []
+    FLOAT8: 
+      java_type: "Double"
+      imports: []
+    FLOAT: 
+      java_type: "Double"
+      imports: []
+    
+    # 序列类型
+    SMALLSERIAL: 
+      java_type: "Integer"
+      imports: []
+    SERIAL: 
+      java_type: "Integer"
+      imports: []
+    BIGSERIAL: 
+      java_type: "Long"
+      imports: []
+    
+  string:
+    CHAR: 
+      java_type: "String"
+      imports: []
+    CHARACTER: 
+      java_type: "String"
+      imports: []
+    VARCHAR: 
+      java_type: "String"
+      imports: []
+    CHARACTER_VARYING: 
+      java_type: "String"
+      imports: []
+    TEXT: 
+      java_type: "String"
+      imports: []
+    
+  binary:
+    BYTEA: 
+      java_type: "byte[]"
+      imports: []
+    
+  datetime:
+    DATE: 
+      java_type: "LocalDate"
+      imports: ["java.time.LocalDate"]
+    TIME: 
+      java_type: "LocalTime"
+      imports: ["java.time.LocalTime"]
+    TIME_WITH_TIME_ZONE: 
+      java_type: "OffsetTime"
+      imports: ["java.time.OffsetTime"]
+    TIMESTAMP: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    TIMESTAMP_WITH_TIME_ZONE: 
+      java_type: "OffsetDateTime"
+      imports: ["java.time.OffsetDateTime"]
+    INTERVAL: 
+      java_type: "String"
+      imports: []
+    
+  boolean:
+    BOOLEAN: 
+      java_type: "Boolean"
+      imports: []
+    BOOL: 
+      java_type: "Boolean"
+      imports: []
+    
+  json:
+    JSON: 
+      java_type: "String"
+      imports: []
+    JSONB: 
+      java_type: "String"
+      imports: []
+    
+  uuid:
+    UUID: 
+      java_type: "UUID"
+      imports: ["java.util.UUID"]
+    
+  network:
+    INET: 
+      java_type: "String"
+      imports: []
+    CIDR: 
+      java_type: "String"
+      imports: []
+    MACADDR: 
+      java_type: "String"
+      imports: []
+    
+  other:
+    MONEY: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    XML: 
+      java_type: "String"
+      imports: []
+```
+
+### SQL Server 数据类型映射
+
+```yaml
+sqlserver:
+  numeric:
+    TINYINT: 
+      java_type: "Integer"
+      imports: []
+    SMALLINT: 
+      java_type: "Integer"
+      imports: []
+    INT: 
+      java_type: "Integer"
+      imports: []
+    BIGINT: 
+      java_type: "Long"
+      imports: []
+    
+    DECIMAL: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    NUMERIC: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    FLOAT: 
+      java_type: "Double"
+      imports: []
+    REAL: 
+      java_type: "Float"
+      imports: []
+    MONEY: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    SMALLMONEY: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    
+    BIT: 
+      java_type: "Boolean"
+      imports: []
+    
+  string:
+    CHAR: 
+      java_type: "String"
+      imports: []
+    NCHAR: 
+      java_type: "String"
+      imports: []
+    VARCHAR: 
+      java_type: "String"
+      imports: []
+    NVARCHAR: 
+      java_type: "String"
+      imports: []
+    TEXT: 
+      java_type: "String"
+      imports: []
+    NTEXT: 
+      java_type: "String"
+      imports: []
+    
+  binary:
+    BINARY: 
+      java_type: "byte[]"
+      imports: []
+    VARBINARY: 
+      java_type: "byte[]"
+      imports: []
+    IMAGE: 
+      java_type: "byte[]"
+      imports: []
+    
+  datetime:
+    DATE: 
+      java_type: "LocalDate"
+      imports: ["java.time.LocalDate"]
+    TIME: 
+      java_type: "LocalTime"
+      imports: ["java.time.LocalTime"]
+    DATETIME: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    DATETIME2: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    SMALLDATETIME: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    DATETIMEOFFSET: 
+      java_type: "OffsetDateTime"
+      imports: ["java.time.OffsetDateTime"]
+    
+  other:
+    UNIQUEIDENTIFIER: 
+      java_type: "UUID"
+      imports: ["java.util.UUID"]
+    XML: 
+      java_type: "String"
+      imports: []
+    GEOGRAPHY: 
+      java_type: "Object"
+      imports: []
+    GEOMETRY: 
+      java_type: "Object"
+      imports: []
+```
+
+### Oracle 数据类型映射
+
+```yaml
+oracle:
+  numeric:
+    NUMBER: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+      # 注意：NUMBER类型需要根据精度和标度特殊处理
+    INTEGER: 
+      java_type: "Integer"
+      imports: []
+    INT: 
+      java_type: "Integer"
+      imports: []
+    SMALLINT: 
+      java_type: "Integer"
+      imports: []
+    DECIMAL: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    NUMERIC: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    FLOAT: 
+      java_type: "Double"
+      imports: []
+    BINARY_FLOAT: 
+      java_type: "Float"
+      imports: []
+    BINARY_DOUBLE: 
+      java_type: "Double"
+      imports: []
+    
+  string:
+    CHAR: 
+      java_type: "String"
+      imports: []
+    NCHAR: 
+      java_type: "String"
+      imports: []
+    VARCHAR2: 
+      java_type: "String"
+      imports: []
+    NVARCHAR2: 
+      java_type: "String"
+      imports: []
+    CLOB: 
+      java_type: "String"
+      imports: []
+    NCLOB: 
+      java_type: "String"
+      imports: []
+    
+  binary:
+    RAW: 
+      java_type: "byte[]"
+      imports: []
+    LONG_RAW: 
+      java_type: "byte[]"
+      imports: []
+    BLOB: 
+      java_type: "byte[]"
+      imports: []
+    BFILE: 
+      java_type: "String"
+      imports: []
+    
+  datetime:
+    DATE: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    TIMESTAMP: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    TIMESTAMP_WITH_TIME_ZONE: 
+      java_type: "OffsetDateTime"
+      imports: ["java.time.OffsetDateTime"]
+    TIMESTAMP_WITH_LOCAL_TIME_ZONE: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    INTERVAL_YEAR_TO_MONTH: 
+      java_type: "String"
+      imports: []
+    INTERVAL_DAY_TO_SECOND: 
+      java_type: "String"
+      imports: []
+    
+  other:
+    ROWID: 
+      java_type: "String"
+      imports: []
+    UROWID: 
+      java_type: "String"
+      imports: []
+    XMLType: 
+      java_type: "String"
+      imports: []
+```
+
+### SQLite 数据类型映射
+
+```yaml
+sqlite:
+  # SQLite 动态类型系统
+  storage_class:
+    INTEGER: 
+      java_type: "Long"
+      imports: []
+    INT: 
+      java_type: "Integer"
+      imports: []
+    TINYINT: 
+      java_type: "Integer"
+      imports: []
+    SMALLINT: 
+      java_type: "Integer"
+      imports: []
+    MEDIUMINT: 
+      java_type: "Integer"
+      imports: []
+    BIGINT: 
+      java_type: "Long"
+      imports: []
+    
+    TEXT: 
+      java_type: "String"
+      imports: []
+    CHARACTER: 
+      java_type: "String"
+      imports: []
+    VARCHAR: 
+      java_type: "String"
+      imports: []
+    VARYING_CHARACTER: 
+      java_type: "String"
+      imports: []
+    NCHAR: 
+      java_type: "String"
+      imports: []
+    NATIVE_CHARACTER: 
+      java_type: "String"
+      imports: []
+    NVARCHAR: 
+      java_type: "String"
+      imports: []
+    CLOB: 
+      java_type: "String"
+      imports: []
+    
+    REAL: 
+      java_type: "Double"
+      imports: []
+    DOUBLE: 
+      java_type: "Double"
+      imports: []
+    DOUBLE_PRECISION: 
+      java_type: "Double"
+      imports: []
+    FLOAT: 
+      java_type: "Float"
+      imports: []
+    DECIMAL: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    NUMERIC: 
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    
+    BLOB: 
+      java_type: "byte[]"
+      imports: []
+    
+    DATE: 
+      java_type: "LocalDate"
+      imports: ["java.time.LocalDate"]
+    DATETIME: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    TIMESTAMP: 
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
+    
+    BOOLEAN: 
+      java_type: "Boolean"
+      imports: []
+```
+
+## 特殊处理规则
+
+### Oracle NUMBER 类型精度判断
+```yaml
+precision_rules:
+  oracle_number:
+    - condition: "precision <= 10 AND scale = 0"
+      java_type: "Integer"
+      imports: []
+    - condition: "precision <= 19 AND scale = 0" 
+      java_type: "Long"
+      imports: []
+    - condition: "scale > 0 OR precision > 19"
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+    - default:
+      java_type: "BigDecimal"
+      imports: ["java.math.BigDecimal"]
+```
+
+### JDBC 类型映射 (用于MyBatis XML)
+```yaml
+jdbc_type_mapping:
+  "Integer": "INTEGER"
+  "Long": "BIGINT"
+  "Float": "FLOAT"
+  "Double": "DOUBLE"
+  "Boolean": "BOOLEAN"
+  "String": "VARCHAR"
+  "byte[]": "VARBINARY"
+  "BigDecimal": "DECIMAL"
+  "BigInteger": "BIGINT"
+  "LocalDate": "DATE"
+  "LocalTime": "TIME"
+  "LocalDateTime": "TIMESTAMP"
+  "OffsetDateTime": "TIMESTAMP_WITH_TIMEZONE"
+  "OffsetTime": "TIME_WITH_TIMEZONE"
+  "UUID": "VARCHAR"
+  "Object": "OTHER"
+```
+
+## 与模板集成说明
+
+### 在模板中使用
+```mustache
+{{#imports}}
+import {{.}};
+{{/imports}}
+
+public class {{className}} {
+{{#columns}}
+    private {{javaType}} {{javaName}};
+{{/columns}}
+}
+```
+
+### 数据结构示例
+```json
+{
+  "imports": ["java.time.LocalDateTime", "java.math.BigDecimal"],
+  "columns": [
+    {
+      "javaName": "id",
+      "javaType": "Long",
+      "jdbcType": "BIGINT"
+    },
+    {
+      "javaName": "createdAt", 
+      "javaType": "LocalDateTime",
+      "jdbcType": "TIMESTAMP"
+    }
+  ]
+}
+```
+
+## 使用原则
+
+1. **基本类型无需导入**: Integer、String、Boolean等直接使用
+2. **复杂类型需要导入**: 所有java.time.*、java.math.*、java.util.*等
+3. **模板友好**: imports数组直接用于{{#imports}}循环
+4. **JDBC兼容**: 提供jdbcType用于MyBatis XML生成
+
+这样配置文件与模板完美配合，既简洁又实用！

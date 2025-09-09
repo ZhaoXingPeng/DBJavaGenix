@@ -1,0 +1,31 @@
+package {{servicePackage}};
+
+import com.baomidou.mybatisplus.extension.service.IService;
+import {{entityPackage}}.{{className}};
+import java.util.List;
+
+/**
+ * {{comment}}({{tableName}})表服务接口
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+public interface {{className}}Service extends IService<{{className}}> {
+
+    /**
+     * 批量新增数据
+     *
+     * @param entities 实体对象列表
+     * @return 影响行数
+     */
+    int insertBatch(List<{{className}}> entities);
+
+    /**
+     * 批量新增或按主键更新数据
+     *
+     * @param entities 实体对象列表
+     * @return 影响行数
+     */
+    int insertOrUpdateBatch(List<{{className}}> entities);
+
+}

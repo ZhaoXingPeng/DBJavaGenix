@@ -1,0 +1,72 @@
+package {{servicePackage}};
+
+import {{entityPackage}}.{{className}};
+{{#hasSpringData}}
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+{{/hasSpringData}}
+{{^hasSpringData}}
+import java.util.List;
+{{/hasSpringData}}
+
+/**
+ * {{comment}}({{tableName}})表服务接口
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+public interface {{className}}Service {
+
+    /**
+     * 通过ID查询单条数据
+     *
+     * @param {{primaryKeyName}} 主键
+     * @return 实例对象
+     */
+    {{className}} queryById({{primaryKeyType}} {{primaryKeyName}});
+
+    /**
+     * 分页查询
+     *
+     * @param {{entityNameLowerCase}} 筛选条件
+     {{#hasSpringData}}
+     * @param pageRequest 分页对象
+     {{/hasSpringData}}
+     {{^hasSpringData}}
+     * @param offset 偏移量
+     * @param limit 限制数量
+     {{/hasSpringData}}
+     * @return 查询结果
+     */
+    {{#hasSpringData}}
+    Page<{{className}}> queryByPage({{className}} {{entityNameLowerCase}}, PageRequest pageRequest);
+    {{/hasSpringData}}
+    {{^hasSpringData}}
+    List<{{className}}> queryByPage({{className}} {{entityNameLowerCase}}, int offset, int limit);
+    {{/hasSpringData}}
+
+    /**
+     * 新增数据
+     *
+     * @param {{entityNameLowerCase}} 实例对象
+     * @return 实例对象
+     */
+    {{className}} insert({{className}} {{entityNameLowerCase}});
+
+    /**
+     * 修改数据
+     *
+     * @param {{entityNameLowerCase}} 实例对象
+     * @return 实例对象
+     */
+    {{className}} update({{className}} {{entityNameLowerCase}});
+
+    /**
+     * 通过主键删除数据
+     *
+     * @param {{primaryKeyName}} 主键
+     * @return 是否成功
+     */
+    boolean deleteById({{primaryKeyType}} {{primaryKeyName}});
+
+}

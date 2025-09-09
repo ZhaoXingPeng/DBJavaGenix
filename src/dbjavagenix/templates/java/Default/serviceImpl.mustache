@@ -1,0 +1,106 @@
+package {{serviceImplPackage}};
+
+import {{entityPackage}}.{{className}};
+import {{daoPackage}}.{{className}}Dao;
+import {{servicePackage}}.{{className}}Service;
+import org.springframework.stereotype.Service;
+{{#hasSpringData}}
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+{{/hasSpringData}}
+{{^hasSpringData}}
+import java.util.List;
+{{/hasSpringData}}
+
+{{#hasJavax}}
+import javax.annotation.Resource;
+{{/hasJavax}}
+{{#hasJakarta}}
+import jakarta.annotation.Resource;
+{{/hasJakarta}}
+
+/**
+ * {{comment}}({{tableName}})表服务实现类
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+@Service("{{entityNameLowerCase}}Service")
+public class {{className}}ServiceImpl implements {{className}}Service {
+    
+    @Resource
+    private {{className}}Dao {{entityNameLowerCase}}Dao;
+
+    /**
+     * 通过ID查询单条数据
+     *
+     * @param {{primaryKeyName}} 主键
+     * @return 实例对象
+     */
+    @Override
+    public {{className}} queryById({{primaryKeyType}} {{primaryKeyName}}) {
+        return this.{{entityNameLowerCase}}Dao.queryById({{primaryKeyName}});
+    }
+
+    /**
+     * 分页查询
+     *
+     * @param {{entityNameLowerCase}} 筛选条件
+     {{#hasSpringData}}
+     * @param pageRequest 分页对象
+     {{/hasSpringData}}
+     {{^hasSpringData}}
+     * @param offset 偏移量
+     * @param limit 限制数量
+     {{/hasSpringData}}
+     * @return 查询结果
+     */
+    @Override
+    {{#hasSpringData}}
+    public Page<{{className}}> queryByPage({{className}} {{entityNameLowerCase}}, PageRequest pageRequest) {
+        long total = this.{{entityNameLowerCase}}Dao.count({{entityNameLowerCase}});
+        return new PageImpl<>(this.{{entityNameLowerCase}}Dao.queryAllByLimit({{entityNameLowerCase}}, pageRequest), pageRequest, total);
+    }
+    {{/hasSpringData}}
+    {{^hasSpringData}}
+    public List<{{className}}> queryByPage({{className}} {{entityNameLowerCase}}, int offset, int limit) {
+        return this.{{entityNameLowerCase}}Dao.queryAllByLimit({{entityNameLowerCase}}, offset, limit);
+    }
+    {{/hasSpringData}}
+
+    /**
+     * 新增数据
+     *
+     * @param {{entityNameLowerCase}} 实例对象
+     * @return 实例对象
+     */
+    @Override
+    public {{className}} insert({{className}} {{entityNameLowerCase}}) {
+        this.{{entityNameLowerCase}}Dao.insert({{entityNameLowerCase}});
+        return {{entityNameLowerCase}};
+    }
+
+    /**
+     * 修改数据
+     *
+     * @param {{entityNameLowerCase}} 实例对象
+     * @return 实例对象
+     */
+    @Override
+    public {{className}} update({{className}} {{entityNameLowerCase}}) {
+        this.{{entityNameLowerCase}}Dao.update({{entityNameLowerCase}});
+        return this.queryById({{entityNameLowerCase}}.get{{capitalizedPrimaryKeyName}}());
+    }
+
+    /**
+     * 通过主键删除数据
+     *
+     * @param {{primaryKeyName}} 主键
+     * @return 是否成功
+     */
+    @Override
+    public boolean deleteById({{primaryKeyType}} {{primaryKeyName}}) {
+        return this.{{entityNameLowerCase}}Dao.deleteById({{primaryKeyName}}) > 0;
+    }
+}

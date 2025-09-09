@@ -1,0 +1,29 @@
+{
+  "name": "dbjavagenix-mcp-server",
+  "version": "0.1.0",
+  "description": "DBJavaGenix MCP Server for Cherry Studio and other MCP clients",
+  "main": "index.js",
+  "bin": {
+    "dbjavagenix-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js --help"
+  },
+  "keywords": [
+    "mcp",
+    "java",
+    "code-generation",
+    "database",
+    "mysql",
+    "spring-boot"
+  ],
+  "author": "ZXP <2638265504@qq.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "dbjavagenix-mcp-server": "^0.1.0"
+  }
+}
