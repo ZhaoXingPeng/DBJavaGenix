@@ -10,6 +10,9 @@ from .database.mcp_tools import (
     handle_db_codegen_analyze as async_handle_db_codegen_analyze,
     handle_db_codegen_generate as async_handle_db_codegen_generate
 )
+from .database.mcp_tools import (
+    handle_springboot_read_config as async_handle_springboot_read_config
+)
 
 
 def handle_db_connect_test(arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -149,6 +152,28 @@ def handle_db_codegen_generate(arguments: Dict[str, Any]) -> Dict[str, Any]:
                     return json.loads(response_text)
                 except:
                     return {"success": False, "error": response_text}
+        return {"success": False, "error": "No response"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def handle_springboot_read_config(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Synchronous wrapper for springboot_read_config
+    """
+    try:
+        result = asyncio.run(async_handle_springboot_read_config(arguments))
+        if result and len(result) > 0:
+            response_text = result[0].text
+            if "Raw Response:" in response_text:
+                import json
+                try:
+                    json_part = response_text.split("Raw Response:")[-1].strip()
+                    return json.loads(json_part)
+                except Exception:
+                    return {"success": False, "error": "Failed to parse response"}
+            else:
+                return {"success": False, "error": response_text}
         return {"success": False, "error": "No response"}
     except Exception as e:
         return {"success": False, "error": str(e)}

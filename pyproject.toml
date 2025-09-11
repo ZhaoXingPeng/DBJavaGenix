@@ -32,6 +32,7 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "pymysql>=1.0.0",
     "psycopg2-binary>=2.9.0",
+    "PyYAML>=6.0",
     "pystache>=0.6.0",
     "aiofiles>=23.0.0",
     "typer>=0.9.0",
@@ -63,10 +64,10 @@ dbjavagenix = "dbjavagenix.cli:main"
 dbjavagenix-server = "dbjavagenix.server:main"
 
 [project.urls]
-Homepage = "https://github.com/dbjavagenix/dbjavagenix"
-Documentation = "https://dbjavagenix.readthedocs.io"
-Repository = "https://github.com/dbjavagenix/dbjavagenix.git"
-Issues = "https://github.com/dbjavagenix/dbjavagenix/issues"
+Homepage = "https://github.com/ZhaoXingPeng/DBJavaGenix"
+Documentation = "https://github.com/ZhaoXingPeng/DBJavaGenix"
+Repository = "https://github.com/ZhaoXingPeng/DBJavaGenix.git"
+Issues = "https://github.com/ZhaoXingPeng/DBJavaGenix/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

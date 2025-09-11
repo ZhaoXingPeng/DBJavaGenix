@@ -29,7 +29,8 @@ from ..database.mcp_tools import (
     handle_db_codegen_analyze,
     handle_db_codegen_generate,
     handle_springboot_validate_project,
-    handle_springboot_analyze_dependencies
+    handle_springboot_analyze_dependencies,
+    handle_springboot_read_config
 )
 
 # Configure logging
@@ -111,15 +112,16 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         elif name == "db_codegen_generate":
             return await handle_db_codegen_generate(arguments)
         
-        # Dependency check tools
-        elif name == "java_check_dependencies":
-            return await handle_java_check_dependencies(arguments)
+        # (deprecated/removed) java_check_dependencies was never implemented here;
+        # dependency analysis is covered by springboot_* tools.
             
         # SpringBoot project validation tools
         elif name == "springboot_validate_project":
             return await handle_springboot_validate_project(arguments)
         elif name == "springboot_analyze_dependencies":
             return await handle_springboot_analyze_dependencies(arguments)
+        elif name == "springboot_read_config":
+            return await handle_springboot_read_config(arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
             

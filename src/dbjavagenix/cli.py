@@ -15,9 +15,15 @@ from .config.config_manager import ConfigManager
 from .core.exceptions import DBJavaGenixError
 from .core.models import DatabaseConfig, DatabaseType
 from .database.connection_manager import connection_manager
-from .cli_helpers import handle_db_connect_test, handle_db_query_databases, handle_db_query_tables, handle_db_codegen_analyze, handle_db_codegen_generate
+from .cli_helpers import handle_db_connect_test, handle_db_query_databases, handle_db_query_tables, handle_db_codegen_analyze, handle_db_codegen_generate, handle_springboot_read_config
 from .utils.dependency_manager import DependencyManager
 from .server.mcp_server import run_server
+from .database.mcp_tools import (
+    get_connection_tools,
+    get_table_analysis_tools,
+    get_codegen_tools,
+    get_springboot_project_tools,
+)
 
 app = typer.Typer(
     name="dbjavagenix",
@@ -55,6 +61,7 @@ def version():
     console.print("  - Multiple template architectures (MyBatis, MyBatis-Plus)")
     console.print("  - Java project dependency checking")
     console.print("  - MCP server for LLM integration")
+    console.print("  - Spring Boot project validation and config reading")
     console.print("\n[cyan]Supported Databases:[/cyan] MySQL, PostgreSQL, SQLite, Oracle, SQL Server")
     console.print("[cyan]Supported Build Tools:[/cyan] Maven, Gradle")
 
@@ -529,6 +536,56 @@ def analyze(
 
 
 @app.command()
+def read_config(
+    project_path: Optional[str] = typer.Option(None, "--project", "-p", help="Project root to scan (defaults to CWD)"),
+    active_profile: Optional[str] = typer.Option(None, "--profile", "-r", help="Active profile to overlay (e.g., dev)"),
+    merge_strategy: str = typer.Option("overlay", "--merge", "-m", help="Config merge strategy", 
+                                      case_sensitive=False)
+):
+    """Read Spring Boot configuration and infer base package"""
+    show_ascii_icon()
+    try:
+        console.print("[bold blue]Reading Spring Boot project configuration...[/bold blue]")
+        args = {}
+        if project_path:
+            args["project_path"] = project_path
+        if active_profile:
+            args["active_profile"] = active_profile
+        if merge_strategy:
+            args["merge_strategy"] = merge_strategy
+
+        res = handle_springboot_read_config(args)
+        if not res.get("success"):
+            console.print(f"[red]Failed: {res.get('error', 'Unknown error')}[/red]")
+            raise typer.Exit(1)
+
+        console.print("\n[bold]Project Info[/bold]")
+        console.print(f"Project Root: {res.get('project_root')}")
+        console.print(f"Build Tool: {res.get('build_tool')}")
+        console.print(f"Spring Boot: {res.get('spring_boot_version')}")
+        console.print(f"Base Package: {res.get('base_package')}")
+        console.print(f"Profiles: {', '.join(res.get('profiles_available', []))}")
+        if res.get('active_profile'):
+            console.print(f"Active Profile: {res.get('active_profile')}")
+
+        eff = res.get('effective', {})
+        server = eff.get('server', {})
+        spring = eff.get('spring', {})
+        datasource = spring.get('datasource', {})
+
+        console.print("\n[bold]Effective Config (selected)[/bold]")
+        console.print(f"app.name: {spring.get('application', {}).get('name')}")
+        console.print(f"server.port: {server.get('port')}")
+        console.print(f"context-path: {server.get('servlet', {}).get('context-path')}")
+        console.print(f"datasource.url: {datasource.get('url')}")
+
+        console.print("\n[green]✓ Configuration read successfully[/green]")
+    except Exception as e:
+        console.print(f"[red]Unexpected error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def server(
     config_path: Optional[str] = typer.Option(None, "--config", "-c", help="Configuration file path (optional)")
 ):
@@ -551,12 +608,30 @@ def server(
             console.print("[cyan]Running in zero-configuration mode![/cyan]")
             console.print("[dim]All configuration will be provided dynamically by LLM[/dim]")
         
-        console.print("\n[cyan]MCP Server Capabilities:[/cyan]")
-        console.print("- Database connection tools (5 tools)")
-        console.print("- Table structure analysis tools (5 tools)")
-        console.print("- Java code generation tools (2 tools)")
-        console.print("- Dependency checking tools (1 tool)")
-        console.print("\n[green]Total: 13 MCP tools available[/green]")
+        # Dynamically compute tool counts and show names for clarity
+        try:
+            conn_tools = get_connection_tools()
+            table_tools = get_table_analysis_tools()
+            code_tools = get_codegen_tools()
+            spring_tools = get_springboot_project_tools()
+            total = len(conn_tools) + len(table_tools) + len(code_tools) + len(spring_tools)
+
+            console.print("\n[cyan]MCP Server Capabilities:[/cyan]")
+            console.print(f"- Database connection tools ({len(conn_tools)} tools)")
+            console.print(f"- Table structure analysis tools ({len(table_tools)} tools)")
+            console.print(f"- Java code generation tools ({len(code_tools)} tools)")
+            console.print(f"- Spring Boot project tools ({len(spring_tools)} tools)")
+            # List Spring Boot tools explicitly (includes springboot_read_config)
+            spring_names = ", ".join(t.name for t in spring_tools)
+            console.print(f"  [dim]Spring Boot: {spring_names}[/dim]")
+            console.print(f"\n[green]Total: {total} MCP tools available[/green]")
+        except Exception:
+            # Fallback to a generic message if dynamic loading fails
+            console.print("\n[cyan]MCP Server Capabilities:[/cyan]")
+            console.print("- Database connection tools")
+            console.print("- Table structure analysis tools")
+            console.print("- Java code generation tools")
+            console.print("- Spring Boot project tools")
         
         console.print("\n[bold green]Starting MCP server in stdio mode...[/bold green]")
         console.print("[dim]Server ready for LLM integration (no manual interaction needed)[/dim]")

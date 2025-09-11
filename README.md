@@ -137,6 +137,7 @@ DBJavaGenix通过MCP工具与LLM交互，您需要向LLM提供以下信息：
 | `db_codegen_generate` | 生成完整Java代码 |
 | `springboot_validate_project` | 验证SpringBoot项目结构 |
 | `springboot_analyze_dependencies` | 智能分析项目依赖 |
+| `springboot_read_config` | 读取Spring Boot配置（YAML/Properties/Bootstrap），推断基础包名与合并有效配置 |
 
 ### 模板分类说明
 

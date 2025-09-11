@@ -1,6 +1,6 @@
 {
   "name": "dbjavagenix-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DBJavaGenix MCP Server for Cherry Studio and other MCP clients",
   "main": "index.js",
   "bin": {
@@ -10,6 +10,14 @@
     "start": "node index.js",
     "test": "node index.js --help"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhaoXingPeng/DBJavaGenix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ZhaoXingPeng/DBJavaGenix/issues"
+  },
+  "homepage": "https://github.com/ZhaoXingPeng/DBJavaGenix#readme",
   "keywords": [
     "mcp",
     "java",

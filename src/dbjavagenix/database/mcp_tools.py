@@ -14,6 +14,7 @@ from ..utils.dependency_manager import DependencyManager
 from ..core.exceptions import DatabaseConnectionError, DatabaseQueryError, MCPServiceError
 from ..database.connection_manager import connection_manager
 from ..config.config_manager import ConfigManager
+from ..utils.pom_analyzer import PomAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -2156,6 +2157,36 @@ def get_springboot_project_tools() -> List[Tool]:
                 },
                 "required": ["template_category", "database_type"]
             }
+        ),
+        Tool(
+            name="springboot_read_config",
+            description="Read Spring Boot project configuration (YAML/Properties/Bootstrap) and infer base package",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Optional explicit project root to scan"
+                    },
+                    "active_profile": {
+                        "type": "string",
+                        "description": "Profile name to overlay (e.g. dev, prod)",
+                        "default": ""
+                    },
+                    "include_profiles": {
+                        "type": "boolean",
+                        "description": "Whether to collect all available profile files",
+                        "default": True
+                    },
+                    "merge_strategy": {
+                        "type": "string",
+                        "enum": ["overlay", "base_only", "profile_only"],
+                        "description": "How to merge base and profile configs",
+                        "default": "overlay"
+                    }
+                },
+                "required": []
+            }
         )
     ]
 
@@ -2485,5 +2516,284 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         return [TextContent(
             type="text",
             text=f"Dependency analysis failed: {str(e)}\n\nRaw Response: {error_response}"
+        )]
+
+
+def _read_text_file(path: Path) -> Optional[str]:
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception:
+        try:
+            return path.read_text(encoding="gbk")
+        except Exception:
+            return None
+
+
+def _set_nested(d: Dict[str, Any], dotted_key: str, value: Any) -> None:
+    parts = [p for p in dotted_key.split('.') if p]
+    cur = d
+    for i, part in enumerate(parts):
+        if i == len(parts) - 1:
+            cur[part] = value
+        else:
+            if part not in cur or not isinstance(cur[part], dict):
+                cur[part] = {}
+            cur = cur[part]
+
+
+def _parse_properties_file(path: Path) -> Dict[str, Any]:
+    data: Dict[str, Any] = {}
+    text = _read_text_file(path)
+    if text is None:
+        return data
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#') or line.startswith('!'):
+            continue
+        sep_idx = -1
+        for sep in ('=', ':'):
+            if sep in line:
+                sep_idx = line.find(sep)
+                break
+        if sep_idx == -1:
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            key = parts[0]
+            value = ' '.join(parts[1:])
+        else:
+            key = line[:sep_idx].strip()
+            value = line[sep_idx + 1 :].strip()
+        _set_nested(data, key, value)
+    return data
+
+
+def _parse_yaml_file(path: Path) -> Dict[str, Any]:
+    try:
+        import yaml
+    except Exception:
+        return {}
+    text = _read_text_file(path)
+    if text is None:
+        return {}
+    try:
+        loaded = yaml.safe_load(text)
+        return loaded or {}
+    except Exception:
+        return {}
+
+
+def _deep_merge(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
+    for k, v in src.items():
+        if isinstance(v, dict) and isinstance(dst.get(k), dict):
+            _deep_merge(dst[k], v)
+        else:
+            dst[k] = v
+    return dst
+
+
+def _find_base_package(java_src: Optional[Path]) -> Optional[str]:
+    if not java_src or not java_src.exists():
+        return None
+    candidates: list[Path] = []
+    try:
+        for p in java_src.rglob('*.java'):
+            candidates.append(p)
+            if len(candidates) >= 200:
+                break
+    except Exception:
+        candidates = []
+    for p in candidates:
+        text = _read_text_file(p)
+        if not text:
+            continue
+        if '@SpringBootApplication' in text or 'SpringApplication.run' in text:
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith('package '):
+                    pkg = line[len('package '):].rstrip(';').strip()
+                    if pkg:
+                        return pkg
+    try:
+        top_levels = [d for d in java_src.iterdir() if d.is_dir()]
+        if top_levels:
+            for d in top_levels:
+                java_files = list(d.rglob('*.java'))
+                if java_files:
+                    rel = java_files[0].relative_to(java_src).parent
+                    if rel.parts:
+                        return '.'.join(part for part in rel.parts if part)
+    except Exception:
+        pass
+    return None
+
+
+async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextContent]:
+    try:
+        start_dir = Path(arguments.get('project_path')) if arguments.get('project_path') else None
+        profile = (arguments.get('active_profile') or '').strip()
+        include_profiles = bool(arguments.get('include_profiles', True))
+        merge_strategy = arguments.get('merge_strategy', 'overlay')
+
+        proj = detect_springboot_project_structure(start_dir if start_dir else None)
+        project_root: Optional[Path] = proj.get('project_root')
+        java_src: Optional[Path] = proj.get('java_source_dir')
+        resources_dir: Optional[Path] = proj.get('resources_dir')
+
+        build_tool = None
+        spring_boot_version = None
+        if project_root:
+            if (project_root / 'pom.xml').exists():
+                build_tool = 'maven'
+            elif (project_root / 'build.gradle').exists() or (project_root / 'build.gradle.kts').exists():
+                build_tool = 'gradle'
+            try:
+                analyzer = PomAnalyzer()
+                if build_tool == 'maven':
+                    spring_boot_version = analyzer._extract_spring_boot_version(project_root / 'pom.xml')
+                elif build_tool == 'gradle':
+                    spring_boot_version = analyzer._extract_gradle_spring_boot_version(
+                        project_root / ('build.gradle' if (project_root / 'build.gradle').exists() else 'build.gradle.kts')
+                    )
+            except Exception:
+                spring_boot_version = None
+
+        base_package = _find_base_package(java_src)
+
+        files_scanned: list[str] = []
+        configs: Dict[str, Any] = {}
+        profiles_found: Dict[str, Dict[str, Any]] = {}
+
+        def load_file(path: Path) -> Dict[str, Any]:
+            files_scanned.append(str(path))
+            if path.suffix in ('.yml', '.yaml'):
+                return _parse_yaml_file(path)
+            elif path.suffix == '.properties':
+                return _parse_properties_file(path)
+            return {}
+
+        if resources_dir and resources_dir.exists():
+            base_candidates = [
+                resources_dir / 'application.yml',
+                resources_dir / 'application.yaml',
+                resources_dir / 'application.properties',
+                resources_dir / 'bootstrap.yml',
+                resources_dir / 'bootstrap.yaml',
+                resources_dir / 'bootstrap.properties',
+            ]
+            for f in base_candidates:
+                if f.exists():
+                    cfg = load_file(f)
+                    _deep_merge(configs, cfg)
+
+            if include_profiles:
+                try:
+                    for f in resources_dir.iterdir():
+                        name = f.name
+                        if not f.is_file():
+                            continue
+                        if name.startswith('application-') and (name.endswith('.yml') or name.endswith('.yaml') or name.endswith('.properties')):
+                            prof = name[len('application-'):].split('.')[0]
+                            profiles_found.setdefault(prof, {})
+                            profiles_found[prof] = load_file(f)
+                        elif name.startswith('bootstrap-') and (name.endswith('.yml') or name.endswith('.yaml') or name.endswith('.properties')):
+                            prof = name[len('bootstrap-'):].split('.')[0]
+                            existing = profiles_found.get(prof, {})
+                            _deep_merge(existing, load_file(f))
+                            profiles_found[prof] = existing
+                except Exception:
+                    pass
+
+        effective_config: Dict[str, Any] = {}
+        if merge_strategy == 'base_only':
+            effective_config = configs.copy()
+        elif merge_strategy == 'profile_only':
+            if profile and profile in profiles_found:
+                effective_config = profiles_found[profile]
+            else:
+                effective_config = {}
+        else:
+            effective_config = configs.copy()
+            if profile and profile in profiles_found:
+                _deep_merge(effective_config, profiles_found[profile])
+
+        def _get(d: Dict[str, Any], path: str, default=None):
+            cur = d
+            for part in path.split('.'):
+                if not isinstance(cur, dict) or part not in cur:
+                    return default
+                cur = cur[part]
+            return cur
+
+        extracted = {
+            'spring': {
+                'application': {
+                    'name': _get(effective_config, 'spring.application.name')
+                },
+                'profiles': {
+                    'active': _get(effective_config, 'spring.profiles.active')
+                },
+                'datasource': {
+                    'url': _get(effective_config, 'spring.datasource.url'),
+                    'username': _get(effective_config, 'spring.datasource.username'),
+                    'password': _get(effective_config, 'spring.datasource.password'),
+                    'driver-class-name': _get(effective_config, 'spring.datasource.driver-class-name')
+                }
+            },
+            'server': {
+                'port': _get(effective_config, 'server.port'),
+                'servlet': {
+                    'context-path': _get(effective_config, 'server.servlet.context-path')
+                }
+            },
+            'mybatis': _get(effective_config, 'mybatis', {}),
+            'mybatis-plus': _get(effective_config, 'mybatis-plus', {}),
+            'logging': _get(effective_config, 'logging', {}),
+        }
+
+        response = {
+            'success': True,
+            'project_root': str(project_root) if project_root else None,
+            'java_source_dir': str(java_src) if java_src else None,
+            'resources_dir': str(resources_dir) if resources_dir else None,
+            'build_tool': build_tool,
+            'spring_boot_version': spring_boot_version,
+            'base_package': base_package,
+            'files_scanned': files_scanned,
+            'profiles_available': sorted(list(profiles_found.keys())),
+            'active_profile': profile or _get(effective_config, 'spring.profiles.active'),
+            'effective': extracted,
+            'raw_config': effective_config,
+        }
+
+        text_lines = []
+        text_lines.append('📖 Spring Boot Project Configuration')
+        text_lines.append(f"Project Root: {response['project_root']}")
+        text_lines.append(f"Build Tool: {build_tool or 'Unknown'}  | Spring Boot: {spring_boot_version or 'Unknown'}")
+        text_lines.append(f"Base Package: {base_package or 'Unknown'}")
+        text_lines.append(f"Profiles: {', '.join(response['profiles_available']) if response['profiles_available'] else 'None'}")
+        eff = extracted
+        text_lines.append('— Effective —')
+        text_lines.append(f"app.name={eff.get('spring',{}).get('application',{}).get('name')}")
+        text_lines.append(f"server.port={eff.get('server',{}).get('port')}")
+        text_lines.append(f"context-path={eff.get('server',{}).get('servlet',{}).get('context-path')}")
+        ds = eff.get('spring',{}).get('datasource',{})
+        text_lines.append(f"datasource.url={ds.get('url')}")
+        text_lines.append(f"mapper config present: {'mybatis' in eff or 'mybatis-plus' in eff}")
+
+        return [TextContent(
+            type="text",
+            text='\n'.join(text_lines) + f"\n\nRaw Response: {response}"
+        )]
+
+    except Exception as e:
+        err = {
+            'success': False,
+            'error': 'config_read_failed',
+            'message': str(e)
+        }
+        return [TextContent(
+            type="text",
+            text=f"Failed to read Spring Boot config: {e}\n\nRaw Response: {err}"
         )]
 
