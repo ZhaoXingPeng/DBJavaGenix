@@ -28,7 +28,6 @@ from ..database.mcp_tools import (
     handle_db_table_indexes,
     handle_db_codegen_analyze,
     handle_db_codegen_generate,
-    handle_java_check_dependencies,
     handle_springboot_validate_project,
     handle_springboot_analyze_dependencies
 )

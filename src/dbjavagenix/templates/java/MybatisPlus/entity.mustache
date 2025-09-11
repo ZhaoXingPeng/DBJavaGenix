@@ -11,8 +11,13 @@ import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 {{/useLombok}}
 {{#useSwagger}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.media.Schema;
+{{/hasSpringDoc}}
+{{#hasSwagger2}}
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+{{/hasSwagger2}}
 {{/useSwagger}}
 
 /**
@@ -27,7 +32,12 @@ import io.swagger.annotations.ApiModelProperty;
 @Accessors(chain = true)
 {{/useLombok}}
 {{#useSwagger}}
+{{#hasSpringDoc}}
+@Schema(description = "{{comment}}")
+{{/hasSpringDoc}}
+{{#hasSwagger2}}
 @ApiModel(value = "{{className}}对象", description = "{{comment}}")
+{{/hasSwagger2}}
 {{/useSwagger}}
 @SuppressWarnings("serial")
 public class {{className}} extends Model<{{className}}> {
@@ -37,7 +47,12 @@ public class {{className}} extends Model<{{className}}> {
      * {{comment}}
      */
     {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Schema(description = "{{comment}}")
+    {{/hasSpringDoc}}
+    {{#hasSwagger2}}
     @ApiModelProperty(value = "{{comment}}")
+    {{/hasSwagger2}}
     {{/useSwagger}}
     private {{javaType}} {{javaName}};
 

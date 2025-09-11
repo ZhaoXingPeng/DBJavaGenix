@@ -39,10 +39,10 @@ public interface {{className}}Dao {
      * @return 对象列表
      */
     {{#hasSpringData}}
-    List<{{className}}> queryAllByLimit({{className}} {{entityNameLowerCase}}, @Param("pageable") Pageable pageable);
+    List<{{className}}> queryAllByLimit(@Param("entity") {{className}} {{entityNameLowerCase}}, @Param("pageable") Pageable pageable);
     {{/hasSpringData}}
     {{^hasSpringData}}
-    List<{{className}}> queryAllByLimit({{className}} {{entityNameLowerCase}}, int offset, int limit);
+    List<{{className}}> queryAllByLimit(@Param("entity") {{className}} {{entityNameLowerCase}}, @Param("offset") int offset, @Param("limit") int limit);
     {{/hasSpringData}}
 
     /**
@@ -51,7 +51,7 @@ public interface {{className}}Dao {
      * @param {{entityNameLowerCase}} 查询条件
      * @return 总行数
      */
-    long count({{className}} {{entityNameLowerCase}});
+    long count(@Param("entity") {{className}} {{entityNameLowerCase}});
 
     /**
      * 新增数据

@@ -50,7 +50,7 @@ class DependencyManager:
             database_type=database_type,
             include_swagger=kwargs.get("include_swagger", True),
             include_lombok=kwargs.get("include_lombok", True),
-            include_mapstruct=kwargs.get("include_mapstruct", True)
+            include_mapstruct=kwargs.get("include_mapstruct", False)
         )
         
         # 2. 检查用户现有依赖

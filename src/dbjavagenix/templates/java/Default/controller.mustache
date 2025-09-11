@@ -117,7 +117,9 @@ public class {{className}}Controller {
      * @param {{primaryKeyName}} 主键
      * @return 单条数据
      */
-    @GetMapping("/{{{primaryKeyName}}}")
+    {{=<% %>=}}
+    @GetMapping("/{<% primaryKeyName %>}")
+    <%={{ }}=%>
     {{#useSwagger}}
     {{#hasSwagger2}}
     @ApiOperation("根据ID查询{{comment}}")
@@ -201,7 +203,9 @@ public class {{className}}Controller {
      * @param {{primaryKeyName}} 主键
      * @return 删除是否成功
      */
-    @DeleteMapping("/{{{primaryKeyName}}}")
+    {{=<% %>=}}
+    @DeleteMapping("/{<% primaryKeyName %>}")
+    <%={{ }}=%>
     {{#useSwagger}}
     {{#hasSwagger2}}
     @ApiOperation("删除{{comment}}")

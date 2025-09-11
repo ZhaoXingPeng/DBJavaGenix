@@ -9,15 +9,42 @@ import {{servicePackage}}.{{className}}Service;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.validation.annotation.Validated;
 
+{{#hasJavax}}
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.io.Serializable;
-import java.util.List;
 {{#useSwagger}}
+{{#hasSwagger2}}
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+{{/hasSwagger2}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+{{/hasSpringDoc}}
 {{/useSwagger}}
+{{/hasJavax}}
+
+{{#hasJakarta}}
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
+{{#useSwagger}}
+{{#hasSwagger2}}
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+{{/hasSwagger2}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+{{/hasSpringDoc}}
+{{/useSwagger}}
+{{/hasJakarta}}
+
+import java.io.Serializable;
+import java.util.List;
 
 /**
  * {{comment}}({{tableName}})表控制层
@@ -29,7 +56,12 @@ import io.swagger.annotations.ApiParam;
 @RestController
 @RequestMapping("/api/{{entityNameLowerCase}}")
 {{#useSwagger}}
+{{#hasSwagger2}}
 @Api(tags = "{{comment}}管理")
+{{/hasSwagger2}}
+{{#hasSpringDoc}}
+@Tag(name = "{{comment}}管理")
+{{/hasSpringDoc}}
 {{/useSwagger}}
 public class {{className}}Controller extends ApiController {
     
@@ -38,7 +70,7 @@ public class {{className}}Controller extends ApiController {
      */
     @Resource
     private {{className}}Service {{entityNameLowerCase}}Service;
-
+    
     /**
      * 分页查询所有数据
      *
@@ -48,28 +80,39 @@ public class {{className}}Controller extends ApiController {
      */
     @GetMapping
     {{#useSwagger}}
+    {{#hasSwagger2}}
     @ApiOperation("分页查询{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "分页查询{{comment}}")
+    {{/hasSpringDoc}}
     {{/useSwagger}}
     public R selectAll(
-            {{#useSwagger}}@ApiParam("分页对象") {{/useSwagger}}Page<{{className}}> page, 
-            {{#useSwagger}}@ApiParam("查询条件") {{/useSwagger}}{{className}} {{entityNameLowerCase}}) {
+            {{#useSwagger}}{{#hasSwagger2}}@ApiParam("分页对象"){{/hasSwagger2}}{{#hasSpringDoc}}@Parameter(description = "分页对象"){{/hasSpringDoc}}{{/useSwagger}} Page<{{className}}> page,
+            {{#useSwagger}}{{#hasSwagger2}}@ApiParam("查询条件"){{/hasSwagger2}}{{#hasSpringDoc}}@Parameter(description = "查询条件"){{/hasSpringDoc}}{{/useSwagger}} {{className}} {{entityNameLowerCase}}) {
         return success(this.{{entityNameLowerCase}}Service.page(page, new QueryWrapper<>({{entityNameLowerCase}})));
     }
-
+    
     /**
      * 通过主键查询单条数据
      *
      * @param id 主键
      * @return 单条数据
      */
-    @GetMapping("{id}")
+    @GetMapping("/{id}")
     {{#useSwagger}}
+    {{#hasSwagger2}}
     @ApiOperation("根据ID查询{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "根据ID查询{{comment}}")
+    {{/hasSpringDoc}}
     {{/useSwagger}}
-    public R selectOne({{#useSwagger}}@ApiParam("主键ID") {{/useSwagger}}@PathVariable Serializable id) {
+    public R selectOne(
+            {{#useSwagger}}{{#hasSwagger2}}@ApiParam("主键ID"){{/hasSwagger2}}{{#hasSpringDoc}}@Parameter(description = "主键ID"){{/hasSpringDoc}}{{/useSwagger}} @PathVariable Serializable id) {
         return success(this.{{entityNameLowerCase}}Service.getById(id));
     }
-
+    
     /**
      * 新增数据
      *
@@ -78,13 +121,18 @@ public class {{className}}Controller extends ApiController {
      */
     @PostMapping
     {{#useSwagger}}
+    {{#hasSwagger2}}
     @ApiOperation("新增{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "新增{{comment}}")
+    {{/hasSpringDoc}}
     {{/useSwagger}}
     public R insert(
-            {{#useSwagger}}@ApiParam("{{comment}}信息") {{/useSwagger}}@Valid @RequestBody {{className}} {{entityNameLowerCase}}) {
+            {{#useSwagger}}{{#hasSwagger2}}@ApiParam("{{comment}}信息"){{/hasSwagger2}}{{#hasSpringDoc}}@Parameter(description = "{{comment}}信息"){{/hasSpringDoc}}{{/useSwagger}} @Valid @RequestBody {{className}} {{entityNameLowerCase}}) {
         return success(this.{{entityNameLowerCase}}Service.save({{entityNameLowerCase}}));
     }
-
+    
     /**
      * 修改数据
      *
@@ -93,13 +141,18 @@ public class {{className}}Controller extends ApiController {
      */
     @PutMapping
     {{#useSwagger}}
+    {{#hasSwagger2}}
     @ApiOperation("更新{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "更新{{comment}}")
+    {{/hasSpringDoc}}
     {{/useSwagger}}
     public R update(
-            {{#useSwagger}}@ApiParam("{{comment}}信息") {{/useSwagger}}@Valid @RequestBody {{className}} {{entityNameLowerCase}}) {
+            {{#useSwagger}}{{#hasSwagger2}}@ApiParam("{{comment}}信息"){{/hasSwagger2}}{{#hasSpringDoc}}@Parameter(description = "{{comment}}信息"){{/hasSpringDoc}}{{/useSwagger}} @Valid @RequestBody {{className}} {{entityNameLowerCase}}) {
         return success(this.{{entityNameLowerCase}}Service.updateById({{entityNameLowerCase}}));
     }
-
+    
     /**
      * 删除数据
      *
@@ -108,10 +161,15 @@ public class {{className}}Controller extends ApiController {
      */
     @DeleteMapping
     {{#useSwagger}}
+    {{#hasSwagger2}}
     @ApiOperation("批量删除{{comment}}")
+    {{/hasSwagger2}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "批量删除{{comment}}")
+    {{/hasSpringDoc}}
     {{/useSwagger}}
     public R delete(
-            {{#useSwagger}}@ApiParam("主键ID列表") {{/useSwagger}}@RequestParam("idList") List<{{primaryKeyType}}> idList) {
+            {{#useSwagger}}{{#hasSwagger2}}@ApiParam("主键ID列表"){{/hasSwagger2}}{{#hasSpringDoc}}@Parameter(description = "主键ID列表"){{/hasSpringDoc}}{{/useSwagger}} @RequestParam("idList") List<{{primaryKeyType}}> idList) {
         return success(this.{{entityNameLowerCase}}Service.removeByIds(idList));
     }
 }

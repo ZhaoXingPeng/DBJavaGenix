@@ -17,8 +17,10 @@ class CodegenAnalyzer:
     def __init__(self, connection_manager: ConnectionManager):
         self.connection_manager = connection_manager
     
-    async def analyze_table_for_codegen(self, connection_id: str, table_name: str, 
-                                       all_table_names: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def analyze_table_for_codegen(self, connection_id: str, table_name: str,
+                                       all_table_names: Optional[List[str]] = None,
+                                       template_category: str = "Default",
+                                       project_root: Optional[str] = None) -> Dict[str, Any]:
         """分析单个表的结构，返回代码生成所需的完整信息"""
         
         # 获取表基本信息
@@ -45,7 +47,12 @@ class CodegenAnalyzer:
         
         # 构建代码生成上下文
         context_builder = TemplateContextBuilder(author="ZXP", package_name="com.example")
-        context = context_builder.build_context(table_obj, all_table_names=all_table_names)
+        context = context_builder.build_context(
+            table_obj,
+            template_category=template_category,
+            all_table_names=all_table_names,
+            project_root=project_root
+        )
         
         return {
             "table_name": table_name,
@@ -377,7 +384,22 @@ class CodegenGenerator:
         # 获取模板文件列表
         from ..generator.template_context import TemplateConfigManager
         template_config = TemplateConfigManager()
-        template_files = template_config.get_template_files(template_category)
+        base_templates = template_config.get_template_files(template_category)
+        template_files = list(base_templates)
+        # 动态附加DTO/VO/MapStruct模板 & MyBatis-Plus配置
+        tc = analysis_result.get("template_context", {})
+        use_mapstruct = bool(tc.get("useMapStruct"))
+        include_dto_vo = bool(tc.get("includeDtoVo") or tc.get("include_dto_vo"))
+        extras: list[str] = []
+        if include_dto_vo:
+            extras.extend(["dto.mustache", "vo.mustache"])
+        if use_mapstruct:
+            extras.append("mapstruct_mapper.mustache")
+        # 为 MyBatis-Plus 路线附加配置类（分页拦截器）
+        if template_category in ("MybatisPlus", "MybatisPlus-Mixed"):
+            extras.append("mybatis_plus_config.mustache")
+        if extras:
+            template_files.extend(extras)
         
         # 使用分析结果中的模板上下文，但更新配置相关字段
         context = analysis_result["template_context"].copy()
@@ -432,7 +454,9 @@ class CodegenGenerator:
         # 为每个模板生成代码
         for template_file in template_files:
             try:
-                code = await self._render_template(template_file, context, template_category)
+                # 附加模板从 common 目录加载
+                effective_category = template_category if template_file in base_templates else "common"
+                code = await self._render_template(template_file, context, effective_category)
                 generated_code[template_file] = {
                     "filename": self._get_output_filename(template_file, context),
                     "code": code,

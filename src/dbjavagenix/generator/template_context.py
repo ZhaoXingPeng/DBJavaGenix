@@ -521,4 +521,5 @@ class TemplateConfigManager:
             "dto.mustache": "dto/{packageSuffix}/{className}DTO.java",
             "vo.mustache": "vo/{packageSuffix}/{className}VO.java",
             "mapstruct_mapper.mustache": "mapper/{packageSuffix}/{className}Mapper.java"
+            ,"mybatis_plus_config.mustache": "config/MybatisPlusConfig.java"
         }

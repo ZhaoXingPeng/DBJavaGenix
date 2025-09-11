@@ -10,8 +10,13 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 {{/useLombok}}
 {{#useSwagger}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.media.Schema;
+{{/hasSpringDoc}}
+{{#hasSwagger2}}
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+{{/hasSwagger2}}
 {{/useSwagger}}
 
 /**
@@ -26,7 +31,12 @@ import io.swagger.annotations.ApiModelProperty;
 @AllArgsConstructor
 {{/useLombok}}
 {{#useSwagger}}
+{{#hasSpringDoc}}
+@Schema(description = "{{comment}}")
+{{/hasSpringDoc}}
+{{#hasSwagger2}}
 @ApiModel(description = "{{comment}}")
+{{/hasSwagger2}}
 {{/useSwagger}}
 public class {{className}} implements Serializable {
     private static final long serialVersionUID = {{serialVersionUID}}L;
@@ -36,7 +46,12 @@ public class {{className}} implements Serializable {
      * {{comment}}
      */
     {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Schema(description = "{{comment}}", required = {{^nullable}}true{{/nullable}}{{#nullable}}false{{/nullable}})
+    {{/hasSpringDoc}}
+    {{#hasSwagger2}}
     @ApiModelProperty(value = "{{comment}}", required = {{^nullable}}true{{/nullable}}{{#nullable}}false{{/nullable}})
+    {{/hasSwagger2}}
     {{/useSwagger}}
     private {{javaType}} {{javaName}};
 

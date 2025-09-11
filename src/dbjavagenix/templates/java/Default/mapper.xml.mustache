@@ -3,9 +3,10 @@
 <mapper namespace="{{daoPackage}}.{{className}}Dao">
 
     <resultMap type="{{entityPackage}}.{{className}}" id="{{className}}Map">
-{{#columns}}
+        <id property="{{primaryKeyName}}" column="{{primaryKeyColumn}}"/>
+{{#otherColumns}}
         <result property="{{javaName}}" column="{{name}}" jdbcType="{{jdbcType}}"/>
-{{/columns}}
+{{/otherColumns}}
     </resultMap>
 
     <!--查询单个-->
@@ -27,14 +28,17 @@
         from {{tableName}}
         <where>
 {{#columns}}
-            <if test="{{javaName}} != null{{#stringType}} and {{javaName}} != ''{{/stringType}}">
-                and {{name}} = #{ {{javaName}} }
+            <if test="entity.{{javaName}} != null{{#stringType}} and entity.{{javaName}} != ''{{/stringType}}">
+                and {{name}} = #{ entity.{{javaName}} }
             </if>
 {{/columns}}
         </where>
-        {{#pagination}}
+        {{#hasSpringData}}
         limit #{pageable.offset}, #{pageable.pageSize}
-        {{/pagination}}
+        {{/hasSpringData}}
+        {{^hasSpringData}}
+        limit #{offset}, #{limit}
+        {{/hasSpringData}}
     </select>
 
     <!--统计总行数-->
@@ -43,8 +47,8 @@
         from {{tableName}}
         <where>
 {{#columns}}
-            <if test="{{javaName}} != null{{#stringType}} and {{javaName}} != ''{{/stringType}}">
-                and {{name}} = #{ {{javaName}} }
+            <if test="entity.{{javaName}} != null{{#stringType}} and entity.{{javaName}} != ''{{/stringType}}">
+                and {{name}} = #{ entity.{{javaName}} }
             </if>
 {{/columns}}
         </where>
@@ -70,9 +74,10 @@
         <foreach collection="entities" item="entity" separator=",">
             ({{#otherColumns}}#{entity.{{javaName}}}{{#hasNext}}, {{/hasNext}}{{/otherColumns}})
         </foreach>
+        as new
         on duplicate key update
-        {{#otherColumns}}{{name}} = values({{name}}){{#hasNext}},{{/hasNext}}
-        {{/otherColumns}}
+        {{#otherColumns}}{{name}} = new.{{name}}{{#hasNext}},
+        {{/hasNext}}{{/otherColumns}}
     </insert>
 
     <!--通过主键修改数据-->

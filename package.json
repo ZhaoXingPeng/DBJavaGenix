@@ -24,6 +24,7 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/server-sequential-thinking": "^2025.7.1",
     "dbjavagenix-mcp-server": "^0.1.0"
   }
 }

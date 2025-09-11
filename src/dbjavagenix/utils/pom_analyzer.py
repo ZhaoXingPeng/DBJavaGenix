@@ -105,6 +105,19 @@ class PomAnalyzer:
         
         # 3. 对比分析
         comparison_results = self._compare_dependencies(requirements, existing_deps)
+
+        # 3.1 模板适配过滤：在 MyBatis 系列模板下不强制引入 JPA，且避免建议裸 mybatis
+        try:
+            if template_category in ("Default", "MybatisPlus", "MybatisPlus-Mixed"):
+                comparison_results = [
+                    comp for comp in comparison_results
+                    if f"{comp.requirement.group_id}:{comp.requirement.artifact_id}" not in {
+                        "org.springframework.boot:spring-boot-starter-data-jpa",
+                        "org.mybatis:mybatis"
+                    }
+                ]
+        except Exception:
+            pass
         
         # 4. 生成建议
         recommendations = self._generate_recommendations(comparison_results, spring_boot_version)
@@ -499,7 +512,46 @@ class PomAnalyzer:
         
         # 收集需要添加的依赖
         missing_deps = []
-        for comp in comparison_results:
+        # Dynamically decide which missing deps to add based on the project's stack
+        pom_path = Path(project_root) / "pom.xml"
+        boot_version = None
+        existing_coords = set()
+        try:
+            if pom_path.exists():
+                boot_version = self._extract_spring_boot_version(pom_path)
+                existing = self._parse_pom_file(pom_path)
+                existing_coords = {f"{d.group_id}:{d.artifact_id}" for d in existing}
+        except Exception:
+            pass
+
+        is_boot2 = bool(boot_version and str(boot_version).startswith("2."))
+        uses_legacy_swagger = any(c.startswith("io.springfox:") or c == "io.swagger:swagger-annotations" for c in existing_coords)
+
+        def is_allowed(comp) -> bool:
+            coord = f"{comp.requirement.group_id}:{comp.requirement.artifact_id}"
+            # Never add JPA for MyBatis/MyBatis-Plus based templates
+            if coord == "org.springframework.boot:spring-boot-starter-data-jpa":
+                return False
+            # Never add bare MyBatis when using Spring Boot starters
+            if coord == "org.mybatis:mybatis":
+                return False
+            # Prefer stack consistency for Swagger/OpenAPI
+            if is_boot2 or uses_legacy_swagger:
+                # On legacy projects, avoid adding springdoc unless user already uses it
+                if coord.startswith("org.springdoc:"):
+                    return False
+            else:
+                # On modern projects, avoid adding legacy swagger annotations
+                if coord.startswith("io.swagger:") or coord.startswith("io.springfox:"):
+                    return False
+            # Jakarta/Javax base APIs are provided by Boot/starters; avoid explicit adds
+            if comp.requirement.group_id.startswith("jakarta."):
+                return False
+            if comp.requirement.group_id.startswith("javax."):
+                return False
+            return True
+
+        for comp in [c for c in comparison_results if is_allowed(c)]:
             if comp.status == "missing":
                 missing_deps.append(comp.requirement)
         

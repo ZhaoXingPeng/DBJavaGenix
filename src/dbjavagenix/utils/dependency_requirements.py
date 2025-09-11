@@ -251,14 +251,14 @@ class DependencyRequirements:
         if template_category == "Default":
             # 传统MyBatis - 需要核心MyBatis和Spring Boot集成
             requirements["required"].extend([
-                self.SPRING_BOOT_DEPENDENCIES["spring-boot-starter-data-jpa"],
+                # JPA not required for MyBatis-based Default template
                 self.MYBATIS_DEPENDENCIES["mybatis"],
                 self.MYBATIS_DEPENDENCIES["mybatis-spring-boot"]
             ])
         elif template_category in ["MybatisPlus", "MybatisPlus-Mixed"]:
             # MyBatis-Plus - 已包含MyBatis核心，不需要单独的MyBatis依赖
             requirements["required"].extend([
-                self.SPRING_BOOT_DEPENDENCIES["spring-boot-starter-data-jpa"], 
+                # JPA not required for MyBatis-Plus templates
                 self.MYBATIS_DEPENDENCIES["mybatis-plus"]
             ])
             # 注意：不添加代码生成器相关依赖，因为我们本身就是代码生成器
@@ -356,7 +356,13 @@ class DependencyRequirements:
             self.MYBATIS_DEPENDENCIES["mybatis"].version = compat["mybatis_version"]
         
         if "mybatis-plus" in self.MYBATIS_DEPENDENCIES:
+            # 版本
             self.MYBATIS_DEPENDENCIES["mybatis-plus"].version = compat["mybatis_plus_version"]
+            # Spring Boot 2.x 使用 mybatis-plus-boot-starter；Boot 3.x 使用 mybatis-plus-spring-boot3-starter
+            if spring_boot_version.startswith("2."):
+                self.MYBATIS_DEPENDENCIES["mybatis-plus"].artifact_id = "mybatis-plus-boot-starter"
+            else:
+                self.MYBATIS_DEPENDENCIES["mybatis-plus"].artifact_id = "mybatis-plus-spring-boot3-starter"
         
         # 更新数据库驱动版本
         if "mysql" in self.DATABASE_DEPENDENCIES:

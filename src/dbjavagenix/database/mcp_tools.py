@@ -1423,6 +1423,11 @@ def get_codegen_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Java package name for generated code",
                         "default": "com.example.generated"
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Target Spring Boot project path (with src/main/java)",
+                        "default": "test_project"
                     }
                 },
                 "required": ["connection_id", "table_name"]
@@ -1461,6 +1466,11 @@ def get_codegen_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Java package name for generated code",
                         "default": "com.example.generated"
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Target Spring Boot project path (with src/main/java)",
+                        "default": "test_project"
                     },
                     "include_swagger": {
                         "type": "boolean",
@@ -1516,8 +1526,15 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         # Initialize analyzer
         analyzer = CodegenAnalyzer(connection_manager)
         
-        # Analyze table for code generation
-        analysis_result = await analyzer.analyze_table_for_codegen(connection_id, table_name)
+        # Analyze table for code generation (with project stack detection)
+        proj_struct = detect_springboot_project_structure()
+        project_root = str(proj_struct["project_root"]) if proj_struct.get("project_root") else None
+        analysis_result = await analyzer.analyze_table_for_codegen(
+            connection_id,
+            table_name,
+            template_category=template_category,
+            project_root=project_root
+        )
         
         # Update template context with user-provided values
         analysis_result["template_context"].update({
@@ -1650,16 +1667,16 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         validation_result = await handle_springboot_validate_project(validation_args)
         validation_text = validation_result[0].text if validation_result else "Validation failed"
         
-        # 检查验证是否通过（通过解析响应文本）
-        validation_passed = "✅ Project validation PASSED" in validation_text
-        
-        if not validation_passed:
+        # 仅当项目结构不可用时阻断；依赖问题仅提示
+        structure_ok = ("Project Structure: ✅ OK" in validation_text) or ("✅ Project Root" in validation_text)
+        if not structure_ok:
             return [TextContent(
                 type="text",
-                text=f"❌ Code generation aborted due to project validation failures.\n\n"
-                     f"Please fix the following issues first:\n\n"
-                     f"{validation_text}\n\n"
-                     f"💡 Run 'springboot_validate_project' with create_missing_dirs=true to auto-fix structure issues."
+                text=(
+                    "❌ Code generation aborted: project structure not ready.\n\n"
+                    + validation_text +
+                    "\n\n💡 Try 'springboot_validate_project' with create_missing_dirs=true."
+                )
             )]
         
         # ===== STEP 0.5: 智能依赖分析 =====
@@ -1729,10 +1746,13 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         generator = CodegenGenerator()
         
         # Step 1: Analyze table structure with all table names for prefix optimization
+        _ps = detect_springboot_project_structure()
         analysis_result = await analyzer.analyze_table_for_codegen(
-            connection_id, 
-            table_name, 
-            all_table_names=all_table_names  # 传递所有表名用于前缀分析
+            connection_id,
+            table_name,
+            all_table_names=all_table_names,  # 传递所有表名用于前缀分析
+            template_category=template_category,
+            project_root=str(_ps["project_root"]) if _ps.get("project_root") else None
         )
         
         # Step 2: Update template context with user preferences
@@ -1748,6 +1768,38 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             "useLombok": include_lombok,
             "useMapStruct": include_mapstruct,
         })
+
+        # Recompute package-related paths based on provided package_name
+        try:
+            ctx = analysis_result["template_context"]
+            base_pkg = package_name or ctx.get("packageName") or ctx.get("package") or "com.example"
+            suffix = ctx.get("packageSuffix") or ""
+            def with_suffix(kind: str) -> str:
+                return f"{base_pkg}.{kind}.{suffix}" if suffix else f"{base_pkg}.{kind}"
+            ctx.update({
+                "package": base_pkg,
+                "packageName": base_pkg,
+                "basePackage": base_pkg,
+                "controllerPackage": with_suffix("controller"),
+                "servicePackage": with_suffix("service"),
+                "entityPackage": with_suffix("entity"),
+                "daoPackage": with_suffix("dao"),
+                "dtoPackage": with_suffix("dto"),
+                "voPackage": with_suffix("vo"),
+                "serviceImplPackage": (f"{base_pkg}.service.impl.{suffix}" if suffix else f"{base_pkg}.service.impl"),
+            })
+            # Normalize tech flags to avoid mixing stacks: prefer SpringDoc over Swagger2 when both present
+            if ctx.get("hasSpringDoc"):
+                ctx["hasSwagger2"] = False
+            elif ctx.get("hasSwagger2"):
+                ctx["hasSpringDoc"] = False
+            # Prefer Jakarta over Javax when both present
+            if ctx.get("hasJakarta"):
+                ctx["hasJavax"] = False
+            elif ctx.get("hasJavax"):
+                ctx["hasJakarta"] = False
+        except Exception:
+            pass
         
         # ===== STEP 3: 生成代码 ===== 
         generation_config = {
@@ -1766,7 +1818,15 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         from pathlib import Path
         
         # 重新获取项目结构（可能在验证过程中已创建）
-        project_structure = detect_springboot_project_structure()
+        # Allow caller to pin the target project root
+        project_path_arg = arguments.get("project_path")
+        if project_path_arg:
+            try:
+                project_structure = detect_springboot_project_structure(Path(project_path_arg))
+            except Exception:
+                project_structure = detect_springboot_project_structure()
+        else:
+            project_structure = detect_springboot_project_structure()
         
         # 确定输出目录
         if project_structure["java_source_dir"] and project_structure["java_source_dir"].exists():
@@ -1790,14 +1850,19 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                 relative_path = file_info["filename"]
                 
                 # 判断文件类型并选择正确的输出目录
-                if relative_path.endswith(('.xml', '.yml', '.yaml', '.properties')):
+                if (
+                    relative_path.endswith(('.xml', '.yml', '.yaml', '.properties'))
+                    or relative_path.startswith('resources/')
+                    or relative_path.startswith('mapper/')
+                    or '/mapper/' in relative_path
+                ):
                     # 资源文件放到resources目录
                     if relative_path.startswith('resources/'):
                         relative_path = relative_path[10:]  # 移除 'resources/' 前缀
                     full_output_path = resources_dir / relative_path
                     resource_files.append(str(full_output_path))
                 else:
-                    # Java文件放到java源码目录
+                    # Java文件：路径已包含包结构，直接写入源码目录
                     full_output_path = java_source_dir / relative_path
                     written_files.append(str(full_output_path))
                 

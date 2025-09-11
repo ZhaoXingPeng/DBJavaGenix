@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="{{package}}.dao.{{className}}Dao">
+<mapper namespace="{{daoPackage}}.{{className}}Dao">
 
-    <resultMap type="{{package}}.entity.{{className}}" id="{{className}}Map">
-{{#columns}}
+    <resultMap type="{{entityPackage}}.{{className}}" id="{{className}}Map">
+        <id property="{{primaryKeyName}}" column="{{primaryKeyColumn}}"/>
+{{#otherColumns}}
         <result property="{{javaName}}" column="{{name}}" jdbcType="{{jdbcType}}"/>
-{{/columns}}
+{{/otherColumns}}
     </resultMap>
 
     <!-- 批量插入 -->
@@ -24,8 +25,9 @@
         <foreach collection="entities" item="entity" separator=",">
             ({{#otherColumns}}#{entity.{{javaName}}}{{#hasNext}}, {{/hasNext}}{{/otherColumns}})
         </foreach>
+        as new
         on duplicate key update
-        {{#otherColumns}}{{name}} = values({{name}}){{#hasNext}}, {{/hasNext}}{{/otherColumns}}
+        {{#otherColumns}}{{name}} = new.{{name}}{{#hasNext}}, {{/hasNext}}{{/otherColumns}}
     </insert>
 
 </mapper>
