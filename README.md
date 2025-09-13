@@ -3,8 +3,9 @@
 **智能Java代码生成器** - 基于MCP服务架构的数据库驱动代码生成工具
 
 ## 测试示例
-![Sample Video](https://s3plus.meituan.net/opapisdk/op_ticket_885190757_1757748343766_qdqqd_c2um4z.mp4)
-
+<video width="960" height="540" controls>
+    <source src="https://s3plus.meituan.net/opapisdk/op_ticket_885190757_1757748343766_qdqqd_c2um4z.mp44" type="video/mp4">
+</video>
 ## 核心特性
 
 ### **我们提供的服务**
