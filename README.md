@@ -4,7 +4,7 @@
 
 ## 测试示例
 <video width="960" height="540" controls>
-    <source src="https://s3plus.meituan.net/opapisdk/op_ticket_885190757_1757748343766_qdqqd_c2um4z.mp44" type="video/mp4">
+    <source src="https://github.com/user-attachments/assets/020dd55e-b3d9-4f3a-bd46-16ba2f19bae3" type="video/mp4">
 </video>
 ## 核心特性
 
