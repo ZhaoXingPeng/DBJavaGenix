@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zhaoxingpeng-dbjavagenix-badge.png)](https://mseep.ai/app/zhaoxingpeng-dbjavagenix)
+
 # DBJavaGenix
 
 **智能Java代码生成器** - 基于MCP服务架构的数据库驱动代码生成工具
