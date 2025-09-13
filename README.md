@@ -2,6 +2,11 @@
 
 **智能Java代码生成器** - 基于MCP服务架构的数据库驱动代码生成工具
 
+## 测试示例
+<video width="1920" height="1080" controls>
+    <source src="https://coss.yupoo.com/upchat/2025-09-13/1757747200452.mp4" type="video/mp4">
+</video>
+
 ## 核心特性
 
 ### **我们提供的服务**
