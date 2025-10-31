@@ -10,6 +10,16 @@
 
 ---
 
+> 2025-10 整理:新增 research/ experiments/ 子目录,放近期的技术演进研究与 v0.1 探索复盘。
+
+## 目录结构
+
+- `research/` — 技术演进研究笔记 (MCP / Skills / Agent SDK / 1M context)
+- `experiments/` — v0.1 时期失败的探索复盘 (LangChain / 向量库 / GraphRAG)
+- `archive/` — 历史文档归档 (v0.1 完成计划等)
+
+---
+
 欢迎来到DBJavaGenix文档中心！这里包含了项目的所有文档，帮助您更好地理解和使用DBJavaGenix。
 
 ## 📚 文档导航
