@@ -1,0 +1,124 @@
+package {{controllerPackage}};
+
+import {{entityPackage}}.{{className}};
+import {{servicePackage}}.{{className}}Service;
+{{#generateDto}}
+import {{dtoPackage}}.{{className}}DTO;
+{{/generateDto}}
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+
+{{#useSwagger}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+{{/hasSpringDoc}}
+{{/useSwagger}}
+
+/**
+ * {{comment}}({{tableName}})REST 控制器
+ *
+ * <p>Spring Boot 3.5 + Java 21,jakarta.validation,构造器注入。
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+@RestController
+@RequestMapping("/api/{{entityNameLowerCase}}")
+{{#useSwagger}}
+{{#hasSpringDoc}}
+@Tag(name = "{{comment}}管理")
+{{/hasSpringDoc}}
+{{/useSwagger}}
+public class {{className}}Controller {
+
+    private final {{className}}Service service;
+
+    public {{className}}Controller({{className}}Service service) {
+        this.service = service;
+    }
+
+    /**
+     * 分页查询。
+     */
+    @GetMapping
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "分页查询{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<Page<{{className}}>> queryByPage(Pageable pageable) {
+        return ResponseEntity.ok(service.queryByPage(pageable));
+    }
+
+    /**
+     * 通过主键查询。使用 Java 21 模式匹配处理 Optional。
+     */
+    {{=<% %>=}}
+    @GetMapping("/{<% primaryKeyName %>}")
+    <%={{ }}=%>
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "查询{{comment}}详情")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<{{className}}> queryById(
+            @PathVariable("{{primaryKeyName}}") {{primaryKeyType}} {{primaryKeyName}}) {
+        return service.queryById({{primaryKeyName}})
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 新增。
+     */
+    @PostMapping
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "新增{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<{{className}}> create(
+            @RequestBody @Valid {{#generateDto}}{{className}}DTO{{/generateDto}}{{^generateDto}}{{className}}{{/generateDto}} body) {
+        return ResponseEntity.ok(service.insert(body));
+    }
+
+    /**
+     * 更新。
+     */
+    {{=<% %>=}}
+    @PutMapping("/{<% primaryKeyName %>}")
+    <%={{ }}=%>
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "更新{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<{{className}}> update(
+            @PathVariable("{{primaryKeyName}}") {{primaryKeyType}} {{primaryKeyName}},
+            @RequestBody @Valid {{#generateDto}}{{className}}DTO{{/generateDto}}{{^generateDto}}{{className}}{{/generateDto}} body) {
+        return ResponseEntity.ok(service.update({{primaryKeyName}}, body));
+    }
+
+    /**
+     * 删除。
+     */
+    {{=<% %>=}}
+    @DeleteMapping("/{<% primaryKeyName %>}")
+    <%={{ }}=%>
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Operation(summary = "删除{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    public ResponseEntity<Void> delete(
+            @PathVariable("{{primaryKeyName}}") {{primaryKeyType}} {{primaryKeyName}}) {
+        return service.deleteById({{primaryKeyName}})
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
+    }
+}

@@ -1,0 +1,43 @@
+package {{dtoPackage}};
+
+{{#imports}}
+import {{.}};
+{{/imports}}
+import java.io.Serializable;
+{{#hasJakarta}}
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+{{/hasJakarta}}
+{{#useSwagger}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.media.Schema;
+{{/hasSpringDoc}}
+{{/useSwagger}}
+
+/**
+ * {{comment}}({{tableName}})数据传输对象 (Java 21 record)
+ *
+ * <p>Bean Validation 注解直接标在 record 形参上 (JSR-380 / Hibernate Validator 8.0+ 支持)。
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+{{#useSwagger}}
+{{#hasSpringDoc}}
+@Schema(description = "{{comment}}DTO")
+{{/hasSpringDoc}}
+{{/useSwagger}}
+public record {{className}}DTO(
+{{#columns}}
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Schema(description = "{{comment}}")
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    {{#hasJakarta}}
+    {{^nullable}}@NotNull(message = "{{javaName}} 不能为空"){{/nullable}}{{#maxLength}}{{#isString}} @Size(max = {{maxLength}}){{/isString}}{{/maxLength}}
+    {{/hasJakarta}}
+    {{javaType}} {{javaName}}{{^last}},{{/last}}
+{{/columns}}
+) implements Serializable {
+}

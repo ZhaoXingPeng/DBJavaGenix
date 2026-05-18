@@ -1,0 +1,58 @@
+package {{entityPackage}};
+
+{{#imports}}
+import {{.}};
+{{/imports}}
+import java.io.Serializable;
+{{#hasJakarta}}
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+{{/hasJakarta}}
+{{#useSwagger}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.media.Schema;
+{{/hasSpringDoc}}
+{{/useSwagger}}
+
+/**
+ * {{comment}}({{tableName}})不可变实体 (Java 21 record)
+ *
+ * <p>使用场景: 查询结果投影 / DTO / 不可变视图对象。
+ * <p>需要可变状态请改用 entity-class 风格。
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+{{#useSwagger}}
+{{#hasSpringDoc}}
+@Schema(description = "{{comment}}")
+{{/hasSpringDoc}}
+{{/useSwagger}}
+{{#hasJakarta}}
+@Entity
+@Table(name = "{{tableName}}")
+{{/hasJakarta}}
+public record {{className}}(
+{{#columns}}
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Schema(description = "{{comment}}", requiredMode = {{^nullable}}Schema.RequiredMode.REQUIRED{{/nullable}}{{#nullable}}Schema.RequiredMode.NOT_REQUIRED{{/nullable}})
+    {{/hasSpringDoc}}
+    {{/useSwagger}}
+    {{#hasJakarta}}
+    {{#isPrimaryKey}}@Id {{/isPrimaryKey}}@Column(name = "{{name}}")
+    {{/hasJakarta}}
+    {{javaType}} {{javaName}}{{^last}},{{/last}}
+{{/columns}}
+) implements Serializable {
+
+    /**
+     * 紧凑构造器: 在此处做不变量校验。
+     */
+    public {{className}} {
+        // TODO: 必填字段校验,例如:
+        // Objects.requireNonNull({{primaryKeyName}}, "{{primaryKeyName}} must not be null");
+    }
+}

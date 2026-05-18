@@ -1,0 +1,46 @@
+package {{servicePackage}};
+
+import {{entityPackage}}.{{className}};
+{{#generateDto}}
+import {{dtoPackage}}.{{className}}DTO;
+{{/generateDto}}
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.util.Optional;
+
+/**
+ * {{comment}}({{tableName}})服务接口
+ *
+ * <p>Java 21 sealed 接口示例: 只允许指定实现继承,便于 pattern matching。
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+public sealed interface {{className}}Service permits {{serviceImplPackage}}.{{className}}ServiceImpl {
+
+    /**
+     * 通过主键查询。
+     */
+    Optional<{{className}}> queryById({{primaryKeyType}} {{primaryKeyName}});
+
+    /**
+     * 分页查询。
+     */
+    Page<{{className}}> queryByPage(Pageable pageable);
+
+    /**
+     * 新增。
+     */
+    {{className}} insert({{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}});
+
+    /**
+     * 更新。
+     */
+    {{className}} update({{primaryKeyType}} {{primaryKeyName}}, {{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}});
+
+    /**
+     * 删除。
+     */
+    boolean deleteById({{primaryKeyType}} {{primaryKeyName}});
+}

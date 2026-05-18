@@ -490,9 +490,17 @@ class TemplateConfigManager:
                 "entity.mustache",
                 "dao.mustache",
                 "service.mustache",
-                "serviceImpl.mustache", 
+                "serviceImpl.mustache",
                 "controller.mustache",
                 "mapper.mustache"
+            ],
+            "sb35-java21": [
+                "entity.mustache",
+                "dao.mustache",
+                "service.mustache",
+                "serviceImpl.mustache",
+                "controller.mustache",
+                "dto.mustache"
             ]
         }
         

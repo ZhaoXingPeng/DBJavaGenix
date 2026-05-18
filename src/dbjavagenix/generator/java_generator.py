@@ -154,7 +154,7 @@ class JavaCodeGenerator:
     
     def get_supported_categories(self) -> List[str]:
         """获取支持的模板分类"""
-        return ["Default", "MybatisPlus", "MybatisPlus-Mixed"]
+        return ["Default", "MybatisPlus", "MybatisPlus-Mixed", "sb35-java21"]
     
     def validate_template_category(self, category: str) -> bool:
         """验证模板分类是否支持"""
