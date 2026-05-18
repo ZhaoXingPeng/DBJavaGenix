@@ -11,46 +11,44 @@ authors = [
 ]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
-keywords = ["mcp", "code-generation", "java", "database", "ai"]
+requires-python = ">=3.11"
+keywords = ["mcp", "code-generation", "java", "database", "ai", "skills", "mcp-apps"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Code Generators",
     "Topic :: Database",
 ]
 
 dependencies = [
-    "mcp>=1.0.0",
-    "pydantic>=2.0.0",
-    "sqlalchemy>=2.0.0",
-    "pymysql>=1.0.0",
-    "psycopg2-binary>=2.9.0",
-    "PyYAML>=6.0",
-    "pystache>=0.6.0",
-    "aiofiles>=23.0.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "openai>=1.0.0",
-    "httpx>=0.24.0",
-    "python-dotenv>=1.0.0",
+    "mcp>=1.6.0",
+    "pydantic>=2.10.0",
+    "sqlalchemy>=2.0.36",
+    "pymysql>=1.1.1",
+    "psycopg2-binary>=2.9.10",
+    "PyYAML>=6.0.2",
+    "pystache>=0.6.5",
+    "aiofiles>=24.1.0",
+    "typer>=0.13.0",
+    "rich>=13.9.0",
+    "anthropic>=0.40.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
 ]
 
 docs = [
@@ -75,41 +73,25 @@ where = ["src"]
 [tool.setuptools.package-data]
 dbjavagenix = ["templates/**/*", "config/**/*"]
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ["py39"]
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+target-version = "py311"
+extend-exclude = [".eggs", ".git", ".mypy_cache", ".venv", "build", "dist", "node_modules"]
 
-[tool.flake8]
-max-line-length = 88
-extend-ignore = ["E203", "E501", "W503"]
-exclude = [
-    ".git",
-    "__pycache__",
-    "build",
-    "dist",
-    ".venv",
-]
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
+ignore = ["E203", "E501", "B008"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.mypy]
-python_version = "3.9"
-strict = true
+python_version = "3.11"
+strict = false
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
+disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
