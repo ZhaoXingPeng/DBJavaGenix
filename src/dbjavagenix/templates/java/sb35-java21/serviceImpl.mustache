@@ -14,16 +14,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 
 /**
- * {{comment}}({{tableName}})服务实现
+ * {{comment}}({{tableName}})服务实现。
  *
- * <p>构造器注入(@Autowired 隐式),Java 21 风格。
+ * <p>构造器注入,@Transactional(readOnly=true) 默认只读,写操作单独标注。
  *
  * @author {{author}}
  * @date {{date}}
  */
 @Service
 @Transactional(readOnly = true)
-public final class {{className}}ServiceImpl implements {{className}}Service {
+public class {{className}}ServiceImpl implements {{className}}Service {
 
     private final {{className}}Dao dao;
 
@@ -33,33 +33,45 @@ public final class {{className}}ServiceImpl implements {{className}}Service {
 
     @Override
     public Optional<{{className}}> queryById({{primaryKeyType}} {{primaryKeyName}}) {
-        return dao.findBy{{capitalizedPrimaryKeyName}}({{primaryKeyName}});
+        return dao.findById({{primaryKeyName}});
     }
 
     @Override
     public Page<{{className}}> queryByPage(Pageable pageable) {
-        return dao.findAllBy(pageable);
+        return dao.findAll(pageable);
     }
 
     @Override
     @Transactional
     public {{className}} insert({{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}}) {
-        // TODO: DTO -> Entity 映射 (推荐用 MapStruct 或手写转换)
-        throw new UnsupportedOperationException("尚未实现: 请在此处补充 DTO 到 record 的映射");
+        {{#generateDto}}
+        {{className}} entity = new {{className}}();
+        // TODO: 由代码生成的占位映射, 推荐用 MapStruct 替换以下手写赋值。
+        // BeanUtils.copyProperties({{entityNameLowerCase}}Dto, entity);
+        return dao.save(entity);
+        {{/generateDto}}
+        {{^generateDto}}
+        return dao.save({{entityNameLowerCase}});
+        {{/generateDto}}
     }
 
     @Override
     @Transactional
-    public {{className}} update({{primaryKeyType}} {{primaryKeyName}}, {{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}}) {
-        // record 是不可变的,update 需重建对象后保存
-        throw new UnsupportedOperationException("尚未实现: record 更新需重建对象,推荐使用 wither 模式");
+    public Optional<{{className}}> update({{primaryKeyType}} {{primaryKeyName}}, {{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}}) {
+        return dao.findById({{primaryKeyName}}).map(existing -> {
+            // TODO: 由代码生成的占位映射, 推荐用 MapStruct 替换以下手写赋值。
+            // BeanUtils.copyProperties({{#generateDto}}{{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{entityNameLowerCase}}{{/generateDto}}, existing, "{{primaryKeyName}}");
+            return dao.save(existing);
+        });
     }
 
     @Override
     @Transactional
     public boolean deleteById({{primaryKeyType}} {{primaryKeyName}}) {
-        return dao.findBy{{capitalizedPrimaryKeyName}}({{primaryKeyName}})
-            .map(e -> { dao.delete(e); return true; })
-            .orElse(false);
+        if (!dao.existsById({{primaryKeyName}})) {
+            return false;
+        }
+        dao.deleteById({{primaryKeyName}});
+        return true;
     }
 }

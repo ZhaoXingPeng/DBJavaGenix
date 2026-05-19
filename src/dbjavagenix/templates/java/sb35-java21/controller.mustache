@@ -101,7 +101,9 @@ public class {{className}}Controller {
     public ResponseEntity<{{className}}> update(
             @PathVariable("{{primaryKeyName}}") {{primaryKeyType}} {{primaryKeyName}},
             @RequestBody @Valid {{#generateDto}}{{className}}DTO{{/generateDto}}{{^generateDto}}{{className}}{{/generateDto}} body) {
-        return ResponseEntity.ok(service.update({{primaryKeyName}}, body));
+        return service.update({{primaryKeyName}}, body)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**

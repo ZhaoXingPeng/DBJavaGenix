@@ -10,17 +10,17 @@ import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 
 /**
- * {{comment}}({{tableName}})服务接口
+ * {{comment}}({{tableName}})服务接口。
  *
- * <p>Java 21 sealed 接口示例: 只允许指定实现继承,便于 pattern matching。
+ * <p>Spring Boot 3.5 + Java 21 现代写法,使用 {@link Optional} 替代 nullable 返回。
  *
  * @author {{author}}
  * @date {{date}}
  */
-public sealed interface {{className}}Service permits {{serviceImplPackage}}.{{className}}ServiceImpl {
+public interface {{className}}Service {
 
     /**
-     * 通过主键查询。
+     * 通过主键查询。未找到返回 {@code Optional.empty()}。
      */
     Optional<{{className}}> queryById({{primaryKeyType}} {{primaryKeyName}});
 
@@ -35,12 +35,12 @@ public sealed interface {{className}}Service permits {{serviceImplPackage}}.{{cl
     {{className}} insert({{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}});
 
     /**
-     * 更新。
+     * 按主键更新。
      */
-    {{className}} update({{primaryKeyType}} {{primaryKeyName}}, {{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}});
+    Optional<{{className}}> update({{primaryKeyType}} {{primaryKeyName}}, {{#generateDto}}{{className}}DTO {{entityNameLowerCase}}Dto{{/generateDto}}{{^generateDto}}{{className}} {{entityNameLowerCase}}{{/generateDto}});
 
     /**
-     * 删除。
+     * 按主键删除。返回是否实际删除了一行。
      */
     boolean deleteById({{primaryKeyType}} {{primaryKeyName}});
 }

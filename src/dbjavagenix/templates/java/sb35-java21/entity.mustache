@@ -4,12 +4,20 @@ package {{entityPackage}};
 import {{.}};
 {{/imports}}
 import java.io.Serializable;
+import java.util.Objects;
 {{#hasJakarta}}
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 {{/hasJakarta}}
+{{#useLombok}}
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+{{/useLombok}}
 {{#useSwagger}}
 {{#hasSpringDoc}}
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,10 +25,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 {{/useSwagger}}
 
 /**
- * {{comment}}({{tableName}})不可变实体 (Java 21 record)
+ * {{comment}}({{tableName}})JPA 实体。
  *
- * <p>使用场景: 查询结果投影 / DTO / 不可变视图对象。
- * <p>需要可变状态请改用 entity-class 风格。
+ * <p>Spring Boot 3.5 + Jakarta Persistence 3.x。JPA 规范要求实体为非 final 类,
+ * 含无参构造函数,字段可变(框架代理需求),因此实体不能用 record。
+ * 不可变快照请使用同目录的 {@code dto.mustache} 生成的 record DTO。
  *
  * @author {{author}}
  * @date {{date}}
@@ -34,25 +43,54 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Entity
 @Table(name = "{{tableName}}")
 {{/hasJakarta}}
-public record {{className}}(
+{{#useLombok}}
+@Getter
+@Setter
+@NoArgsConstructor
+{{/useLombok}}
+public class {{className}} implements Serializable {
+
+    private static final long serialVersionUID = {{serialVersionUID}}L;
+
 {{#columns}}
+    /**
+     * {{comment}}
+     */
     {{#useSwagger}}
     {{#hasSpringDoc}}
     @Schema(description = "{{comment}}", requiredMode = {{^nullable}}Schema.RequiredMode.REQUIRED{{/nullable}}{{#nullable}}Schema.RequiredMode.NOT_REQUIRED{{/nullable}})
     {{/hasSpringDoc}}
     {{/useSwagger}}
     {{#hasJakarta}}
-    {{#isPrimaryKey}}@Id {{/isPrimaryKey}}@Column(name = "{{name}}")
+    {{#isPrimaryKey}}@Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    {{/isPrimaryKey}}@Column(name = "{{name}}"{{^nullable}}, nullable = false{{/nullable}}{{#maxLength}}{{#isString}}, length = {{maxLength}}{{/isString}}{{/maxLength}})
     {{/hasJakarta}}
-    {{javaType}} {{javaName}}{{^last}},{{/last}}
-{{/columns}}
-) implements Serializable {
+    private {{javaType}} {{javaName}};
 
-    /**
-     * 紧凑构造器: 在此处做不变量校验。
-     */
-    public {{className}} {
-        // TODO: 必填字段校验,例如:
-        // Objects.requireNonNull({{primaryKeyName}}, "{{primaryKeyName}} must not be null");
+{{/columns}}
+{{^useLombok}}
+{{#columns}}
+    public {{javaType}} get{{capitalizedJavaName}}() {
+        return {{javaName}};
+    }
+
+    public void set{{capitalizedJavaName}}({{javaType}} {{javaName}}) {
+        this.{{javaName}} = {{javaName}};
+    }
+
+{{/columns}}
+{{/useLombok}}
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof {{className}} other)) return false;
+        return Objects.equals({{primaryKeyName}}, other.{{primaryKeyName}});
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash({{primaryKeyName}});
     }
 }

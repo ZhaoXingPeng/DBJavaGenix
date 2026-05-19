@@ -4,17 +4,14 @@ import {{entityPackage}}.{{className}};
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
- * {{comment}}({{tableName}})Spring Data JPA Repository
+ * {{comment}}({{tableName}})Spring Data JPA Repository。
  *
- * <p>Spring Boot 3.x + Spring Data JPA 3.x 原生支持 Java 21 record 作为投影类型。
+ * <p>命名保留为 {@code {{className}}Dao} 与项目其它模板风格一致,内部继承 {@link JpaRepository}。
  *
  * @author {{author}}
  * @date {{date}}
@@ -23,20 +20,8 @@ import java.util.Optional;
 public interface {{className}}Dao extends JpaRepository<{{className}}, {{primaryKeyType}}> {
 
     /**
-     * 通过主键查询
+     * 通过主键查询。Spring Data 派生方法已由 {@link JpaRepository#findById} 提供,
+     * 此处为显式声明,便于扩展自定义查询逻辑。
      */
     Optional<{{className}}> findBy{{capitalizedPrimaryKeyName}}({{primaryKeyType}} {{primaryKeyName}});
-
-    /**
-     * 分页查询(派生查询).
-     */
-    Page<{{className}}> findAllBy(Pageable pageable);
-
-{{#hasNamedExample}}
-    /**
-     * 自定义 JPQL 查询示例(返回 record 投影).
-     */
-    @Query("select e from {{className}} e where e.{{primaryKeyName}} in :ids")
-    List<{{className}}> findByIds(@Param("ids") List<{{primaryKeyType}}> ids);
-{{/hasNamedExample}}
 }
