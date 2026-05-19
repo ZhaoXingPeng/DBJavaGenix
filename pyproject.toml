@@ -74,13 +74,19 @@ where = ["src"]
 dbjavagenix = ["templates/**/*", "config/**/*"]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py311"
 extend-exclude = [".eggs", ".git", ".mypy_cache", ".venv", "build", "dist", "node_modules"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
-ignore = ["E203", "E501", "B008"]
+# 渐进引入: 先只检查真 bug 类规则(pyflakes F, 部分 E),
+# 风格类(I 排序 / UP 升级语法 / SIM 简化) 后续单独 PR 用 ruff --fix 批改
+select = ["F", "E9"]
+ignore = [
+    "E501",  # 行太长 -> 后续 ruff format 统一
+    "F401",  # 未用 import -> __init__.py 经常正常使用
+    "F841",  # 未用本地变量 -> codegen_tools.py 有 2 处可能是隐藏 bug, 留单独 PR
+]
 
 [tool.ruff.format]
 quote-style = "double"

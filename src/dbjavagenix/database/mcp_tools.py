@@ -857,7 +857,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
                 result_text += f"    Java: {col['java_type']}\n"
             result_text += f"    Nullable: {col['nullable']}\n"
             if col['is_primary_key']:
-                result_text += f"    Primary Key: YES\n"
+                result_text += "    Primary Key: YES\n"
             if col['default_value'] is not None:
                 result_text += f"    Default: {col['default_value']}\n"
             if col['comment']:
@@ -865,7 +865,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
             result_text += "\n"
         
         if include_java_types and java_imports:
-            result_text += f"Required Java imports:\n"
+            result_text += "Required Java imports:\n"
             for imp in sorted(java_imports):
                 result_text += f"import {imp};\n"
         
@@ -1586,7 +1586,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         
         # Template context summary
         context = analysis_result["template_context"]
-        result_text += f"\nTemplate Context Generated:\n"
+        result_text += "\nTemplate Context Generated:\n"
         result_text += f"  Entity Class Name: {context.get('className', context.get('name', 'Unknown'))}\n"
         result_text += f"  Variable Name: {context.get('lowerCaseName', context.get('entityNameLowerCase', 'unknown'))}\n"
         result_text += f"  Has Date Fields: {context.get('hasDateField', False)}\n"
@@ -1714,7 +1714,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             dependency_warnings.append(f"⚠️ Dependency Health Score: {health_score}% - Consider reviewing dependencies")
         
         if needs_attention:
-            dependency_warnings.append(f"⚠️ Multiple dependency issues detected - Generated code may not compile correctly")
+            dependency_warnings.append("⚠️ Multiple dependency issues detected - Generated code may not compile correctly")
         
         # ===== STEP 1: 获取数据库所有表名以支持前缀分析 =====
         logger.info("🔍 Getting all table names for package structure optimization...")
@@ -1891,7 +1891,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         # 显示包结构优化信息
         package_suffix = analysis_result["template_context"].get("packageSuffix", "")
         if package_suffix:
-            result_text += f"📦 Package Structure Optimization: ENABLED\n"
+            result_text += "📦 Package Structure Optimization: ENABLED\n"
             result_text += f"   Package Suffix: {package_suffix}\n"
             result_text += f"   Tables Analyzed: {len(all_table_names)}\n"
             
@@ -1907,7 +1907,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                         result_text += f"   → {group.prefix} → {group.package_name} ({len(group.tables)} tables)\n"
                         break
         else:
-            result_text += f"📦 Package Structure: Standard (no prefix optimization)\n"
+            result_text += "📦 Package Structure: Standard (no prefix optimization)\n"
         
         result_text += "\n"
         
@@ -1922,10 +1922,10 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # 显示依赖警告
         if dependency_warnings:
-            result_text += f"\n🔔 Dependency Warnings:\n"
+            result_text += "\n🔔 Dependency Warnings:\n"
             for warning in dependency_warnings:
                 result_text += f"   {warning}\n"
-            result_text += f"   💡 Run 'springboot_analyze_dependencies' for detailed recommendations\n"
+            result_text += "   💡 Run 'springboot_analyze_dependencies' for detailed recommendations\n"
         
         # Generation summary
         if "generation_statistics" not in generation_result:
@@ -1937,7 +1937,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             "success_count": stats["success_files"],
             "error_count": stats["error_files"]
         }
-        result_text += f"\n📊 Generation Summary:\n"
+        result_text += "\n📊 Generation Summary:\n"
         result_text += f"  Total Templates: {summary['total_templates']}\n"
         result_text += f"  Successfully Generated: {summary['success_count']}\n"
         result_text += f"  Errors: {summary['error_count']}\n\n"
@@ -1974,26 +1974,26 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # 文件统计
         total_written = len(written_files) + len(resource_files)
-        result_text += f"\n📈 File Writing Summary:\n"
+        result_text += "\n📈 File Writing Summary:\n"
         result_text += f"  Java Files: {java_file_count} written to {java_source_dir.absolute()}\n"
         result_text += f"  Resource Files: {resource_file_count} written to {resources_dir.absolute()}\n"
         result_text += f"  Total Files: {total_written}\n"
         
         if total_written > 0:
-            result_text += f"\n🎉 SUCCESS: All files written to SpringBoot project structure!\n"
+            result_text += "\n🎉 SUCCESS: All files written to SpringBoot project structure!\n"
             result_text += f"📁 Working Directory: {Path.cwd().absolute()}\n"
         
         # 简化的代码预览（仅显示文件名，不显示完整代码）
-        result_text += f"\n📝 Generated Code Preview:\n"
-        result_text += f"Files are ready in your SpringBoot project structure.\n"
-        result_text += f"Use your IDE to view and edit the generated code.\n"
+        result_text += "\n📝 Generated Code Preview:\n"
+        result_text += "Files are ready in your SpringBoot project structure.\n"
+        result_text += "Use your IDE to view and edit the generated code.\n"
         
         # 依赖管理提醒
         if health_score < 80:
-            result_text += f"\n🔧 Important: Review and fix dependency issues before compiling:\n"
-            result_text += f"   • Run 'springboot_analyze_dependencies' for detailed Maven XML snippets\n"
-            result_text += f"   • Update your pom.xml with missing/outdated dependencies\n"
-            result_text += f"   • Consider migrating from deprecated javax.* to jakarta.* packages\n"
+            result_text += "\n🔧 Important: Review and fix dependency issues before compiling:\n"
+            result_text += "   • Run 'springboot_analyze_dependencies' for detailed Maven XML snippets\n"
+            result_text += "   • Update your pom.xml with missing/outdated dependencies\n"
+            result_text += "   • Consider migrating from deprecated javax.* to jakarta.* packages\n"
         
         return [TextContent(
             type="text",
@@ -2308,7 +2308,7 @@ async def handle_springboot_validate_project(arguments: Dict[str, Any]) -> List[
             ])
         
         # 5. 格式化响应
-        result_text = f"🔍 SpringBoot Project Validation\n"
+        result_text = "🔍 SpringBoot Project Validation\n"
         result_text += f"Template Category: {template_category}\n"
         result_text += f"Working Directory: {current_dir.absolute()}\n\n"
         
@@ -2353,9 +2353,9 @@ async def handle_springboot_validate_project(arguments: Dict[str, Any]) -> List[
         
         # 验证结果
         if validation_results["validation_passed"]:
-            result_text += f"\n✅ Project validation PASSED - Ready for code generation\n"
+            result_text += "\n✅ Project validation PASSED - Ready for code generation\n"
         else:
-            result_text += f"\n❌ Project validation FAILED - Please fix issues before generating code\n"
+            result_text += "\n❌ Project validation FAILED - Please fix issues before generating code\n"
         
         # 建议
         recommendations = validation_results["recommendations"]
@@ -2364,13 +2364,13 @@ async def handle_springboot_validate_project(arguments: Dict[str, Any]) -> List[
             for rec in recommendations:
                 result_text += f"   - {rec}\n"
         
-        result_text += f"\n📋 Validation Summary:\n"
+        result_text += "\n📋 Validation Summary:\n"
         result_text += f"   Project Structure: {'✅ OK' if not structure_issues else '❌ Issues Found'}\n"
         if check_dependencies:
             if "dependencies" in validation_results and not validation_results["dependencies"].get("error"):
                 result_text += f"   Dependencies: {'✅ OK' if validation_results['validation_passed'] else '⚠️ Needs Attention'}\n"
             else:
-                result_text += f"   Dependencies: ❓ Check Failed\n"
+                result_text += "   Dependencies: ❓ Check Failed\n"
         result_text += f"   Overall Status: {'✅ READY' if validation_results['validation_passed'] else '❌ NOT READY'}\n"
         
         result_text += f"\nRaw Validation Result: {validation_results}"
@@ -2441,13 +2441,13 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         migration_guide = manager.generate_migration_guide(project_path)
         
         # 格式化响应
-        result_text = f"🎯 智能依赖分析与修复\n"
+        result_text = "🎯 智能依赖分析与修复\n"
         result_text += f"Project Path: {project_path}\n"
         result_text += f"Template Category: {template_category}\n"
         result_text += f"Database Type: {database_type}\n\n"
         
         # 依赖健康报告
-        result_text += f"📊 依赖健康报告:\n"
+        result_text += "📊 依赖健康报告:\n"
         result_text += f"   Build Tool: {health_report.get('build_tool', 'Unknown')}\n"
         result_text += f"   Health Score: {health_report.get('health_score', 0)}%\n"
         result_text += f"   Found Dependencies: {health_report.get('found_dependencies', 0)}/{health_report.get('total_dependencies', 0)}\n"
@@ -2461,7 +2461,7 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
             if added_count > 0:
                 result_text += f"🔧 自动添加依赖: 成功添加 {added_count} 个缺失依赖\n\n"
             else:
-                result_text += f"✅ 依赖完整性: 所有必需依赖已存在\n\n"
+                result_text += "✅ 依赖完整性: 所有必需依赖已存在\n\n"
         
         fix_result = check_and_fix_result.get("fix_result", {})
         if fix_result.get("success") and "修复" in fix_result.get("message", ""):
@@ -2479,14 +2479,14 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         maven_xml_blocks = analysis_result.get("maven_xml", {})
         
         if maven_xml_blocks.get("missing_dependencies"):
-            result_text += f"📄 Maven Dependencies to Add:\n"
-            result_text += f"``xml\n"
-            result_text += f"<dependencies>\n"
+            result_text += "📄 Maven Dependencies to Add:\n"
+            result_text += "``xml\n"
+            result_text += "<dependencies>\n"
             for dep_block in maven_xml_blocks["missing_dependencies"]:
                 result_text += f"    <!-- {dep_block['description']} -->\n"
                 result_text += f"{dep_block['xml']}\n\n"
-            result_text += f"</dependencies>\n"
-            result_text += f"```\n\n"
+            result_text += "</dependencies>\n"
+            result_text += "```\n\n"
         
         # 依赖健康度评估
         health_score = health_report.get("health_score", 0)
@@ -2499,7 +2499,7 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         else:
             result_text += f"❌ 依赖健康度: 较差 ({health_score}%) - 需要紧急处理依赖问题\n"
         
-        result_text += f"\n💡 智能依赖管理: 自动检查、修复和优化项目依赖配置"
+        result_text += "\n💡 智能依赖管理: 自动检查、修复和优化项目依赖配置"
         
         return [TextContent(
             type="text",

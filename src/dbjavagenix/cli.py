@@ -223,7 +223,7 @@ def generate(
         connection_manager.close_connection(connection_id)
         
         if generated_files:
-            console.print(f"\n[green]✓[/green] Code generation completed successfully!")
+            console.print("\n[green]✓[/green] Code generation completed successfully!")
             console.print(f"[green]Generated {len(generated_files)} files in total[/green]")
             
             # Show generated files
@@ -358,13 +358,13 @@ def check_dependencies(
             console.print(f"[red]Error checking dependencies: {result.get('error', 'Unknown error')}[/red]")
             raise typer.Exit(1)
         
-        console.print(f"\n[bold]Dependency Check Results[/bold]")
+        console.print("\n[bold]Dependency Check Results[/bold]")
         console.print(f"Project Path: {target_path}")
         console.print(f"Build Tool: {result.get('build_tool', 'Unknown')}")
         console.print(f"Health Score: [{'green' if result.get('health_score', 0) >= 80 else 'yellow' if result.get('health_score', 0) >= 60 else 'red'}]{result.get('health_score', 0)}%[/]")
         
         # Show summary
-        console.print(f"\n[cyan]Summary:[/cyan]")
+        console.print("\n[cyan]Summary:[/cyan]")
         console.print(f"  - Found Dependencies: {result.get('found_dependencies', 0)}")
         console.print(f"  - Missing Required: {result.get('missing_required', 0)}")
         console.print(f"  - Missing Optional: {result.get('missing_optional', 0)}")
@@ -414,7 +414,7 @@ def fix_dependencies(
             database_type=database_type
         )
         
-        console.print(f"\n[bold]Dependency Fix Results[/bold]")
+        console.print("\n[bold]Dependency Fix Results[/bold]")
         console.print(f"Project Path: {target_path}")
         console.print(f"Template Category: {template_category}")
         console.print(f"Database Type: {database_type}")
@@ -446,7 +446,7 @@ def fix_dependencies(
         fix_result_data = fix_result.get("fix_result", {})
         if fix_result_data.get("success"):
             if "修复" in fix_result_data.get("message", ""):
-                console.print(f"[green]✓[/green] Successfully fixed deprecated dependencies")
+                console.print("[green]✓[/green] Successfully fixed deprecated dependencies")
             else:
                 console.print("[green]✓[/green] No deprecated dependencies to fix")
         else:
@@ -492,7 +492,7 @@ def migration_guide(
         build_tool = guide_result.get("build_tool", "Unknown")
         suggestions = guide_result.get("migration_suggestions", [])
         
-        console.print(f"\n[bold]Dependency Migration Guide[/bold]")
+        console.print("\n[bold]Dependency Migration Guide[/bold]")
         console.print(f"Project Path: {target_path}")
         console.print(f"Build Tool: {build_tool}")
         console.print(f"Total Suggestions: {guide_result.get('total_suggestions', 0)}")

@@ -8,6 +8,7 @@
 
 from typing import Dict, List, Optional, Any
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 # 移除对dependency_checker的引用，因为我们已经删除了这个文件
@@ -386,7 +387,7 @@ class DependencyManager:
             
             # 查找并替换groupId和artifactId
             updated_content = re.sub(
-                f'<groupId>{re.escape(old_group)}</groupId>\s*<artifactId>{re.escape(old_artifact)}</artifactId>',
+                rf'<groupId>{re.escape(old_group)}</groupId>\s*<artifactId>{re.escape(old_artifact)}</artifactId>',
                 f'<groupId>{new_group}</groupId>\n            <artifactId>{new_artifact}</artifactId>',
                 updated_content,
                 flags=re.MULTILINE

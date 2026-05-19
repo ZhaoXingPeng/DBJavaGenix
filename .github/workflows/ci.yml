@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint & Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create venv & install (dev extras)
+        run: |
+          uv venv --python ${{ matrix.python-version }}
+          uv pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: uv run ruff check src/ tests/
+
+      - name: Ruff format check
+        run: uv run ruff format --check src/ tests/
+        continue-on-error: true  # 渐进引入,允许暂未格式化的文件
+
+      - name: Pytest (unit only) + coverage
+        env:
+          PYTHONPATH: src
+        run: |
+          uv run pytest tests/unit/ \
+            --cov=src/dbjavagenix \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term \
+            --cov-fail-under=30
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  template-render-check:
+    name: Render sb35-java21 templates (pystache smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python deps
+        run: |
+          uv venv --python 3.12
+          uv pip install -e ".[dev]"
+
+      - name: Render all sb35-java21 templates with sample context
+        env:
+          PYTHONPATH: src
+        run: |
+          uv run python -c "
+          import sys
+          sys.path.insert(0, 'src')
+          from pathlib import Path
+          import pystache
+          tpl = Path('src/dbjavagenix/templates/java/sb35-java21')
+          ctx = {
+              'entityPackage':'verify.entity','dtoPackage':'verify.dto',
+              'daoPackage':'verify.dao','servicePackage':'verify.service',
+              'serviceImplPackage':'verify.service.impl','controllerPackage':'verify.controller',
+              'className':'SysUser','tableName':'sys_user','entityNameLowerCase':'sysUser',
+              'comment':'system user','author':'ci','date':'2026-05-23',
+              'primaryKeyName':'id','primaryKeyType':'Long','capitalizedPrimaryKeyName':'Id',
+              'serialVersionUID':'1','hasJakarta':True,'hasJavax':False,
+              'hasSpringDoc':True,'useSwagger':True,'useLombok':True,
+              'generateDto':True,'generateVo':False,'imports':[],
+              'columns':[
+                  {'name':'id','javaName':'id','capitalizedJavaName':'Id','javaType':'Long','comment':'pk','isPrimaryKey':True,'nullable':False,'isString':False,'maxLength':None,'last':False},
+                  {'name':'username','javaName':'username','capitalizedJavaName':'Username','javaType':'String','comment':'name','isPrimaryKey':False,'nullable':False,'isString':True,'maxLength':64,'last':True},
+              ],
+          }
+          r = pystache.Renderer()
+          for f in sorted(tpl.glob('*.mustache')):
+              out = r.render(f.read_text(encoding='utf-8'), ctx)
+              assert out, f'empty render for {f.name}'
+              print(f'OK {f.name} ({len(out)} chars)')
+          print('All sb35-java21 templates render successfully')
+          "

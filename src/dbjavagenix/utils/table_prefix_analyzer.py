@@ -248,7 +248,7 @@ class TablePrefixAnalyzer:
         report = []
         report.append("# 表名前缀分析报告")
         report.append("")
-        report.append(f"## 基本信息")
+        report.append("## 基本信息")
         report.append(f"- **总表数**: {len(table_names)}")
         report.append(f"- **前缀组数**: {len(prefix_groups)}")
         report.append(f"- **使用前缀分组**: {'是' if self.should_use_prefix_grouping(table_names) else '否'}")
@@ -262,7 +262,7 @@ class TablePrefixAnalyzer:
                 report.append(f"### {group.full_name} ({prefix})")
                 report.append(f"- **包名**: `{group.package_name}`")
                 report.append(f"- **表数量**: {len(group.tables)}")
-                report.append(f"- **表列表**:")
+                report.append("- **表列表**:")
                 for table in group.tables:
                     report.append(f"  - {table}")
                 report.append("")

@@ -99,8 +99,7 @@ class TemplateContextBuilder:
             # 表相关
             "tableName": table_info.name,
             "comment": table_info.comment or table_info.name,
-            "entityNameLowerCase": entity_name_lower,
-            
+
             # 作者和日期
             "author": self.author,
             "date": self.date,
@@ -185,7 +184,7 @@ class TemplateContextBuilder:
                 database_type="mysql"  # 默认数据库类型
             )
             return analysis_result.get("technology_stack", TechnologyStack())
-        except Exception as e:
+        except Exception:
             # 如果检测失败，使用默认的现代化技术栈
             from ..utils.pom_analyzer import TechnologyStack
             tech_stack = TechnologyStack()
@@ -288,8 +287,7 @@ class TemplateContextBuilder:
                 "isString": self._is_string_type(column.data_type),
                 "stringType": self._is_string_type(column.data_type),  # 别名
                 "isStringType": self._is_string_type(column.data_type),  # 另一个别名
-                "isStringType": self._is_string_type(column.data_type),  # 别名
-                
+
                 # 循环标志
                 "hasNext": i < len(non_pk_columns) - 1,
                 "isFirst": i == 0,

@@ -123,13 +123,13 @@ class AutoDependencyManager:
             for dep in dependencies:
                 # 为每个依赖添加注释说明
                 new_deps.append(f"    <!-- {dep.description}: {dep.reason} -->")
-                new_deps.append(f"    <dependency>")
+                new_deps.append("    <dependency>")
                 new_deps.append(f"        <groupId>{dep.group_id}</groupId>")
                 new_deps.append(f"        <artifactId>{dep.artifact_id}</artifactId>")
                 new_deps.append(f"        <version>{dep.version}</version>")
                 if dep.scope != "compile":
                     new_deps.append(f"        <scope>{dep.scope}</scope>")
-                new_deps.append(f"    </dependency>")
+                new_deps.append("    </dependency>")
                 added_count += 1
             
             # 正确地重新组装dependencies块
@@ -155,13 +155,13 @@ class AutoDependencyManager:
             for dep in dependencies:
                 # 为每个依赖添加注释说明
                 new_deps_section.append(f"    <!-- {dep.description}: {dep.reason} -->")
-                new_deps_section.append(f"    <dependency>")
+                new_deps_section.append("    <dependency>")
                 new_deps_section.append(f"        <groupId>{dep.group_id}</groupId>")
                 new_deps_section.append(f"        <artifactId>{dep.artifact_id}</artifactId>")
                 new_deps_section.append(f"        <version>{dep.version}</version>")
                 if dep.scope != "compile":
                     new_deps_section.append(f"        <scope>{dep.scope}</scope>")
-                new_deps_section.append(f"    </dependency>")
+                new_deps_section.append("    </dependency>")
                 added_count += 1
             new_deps_section.append("</dependencies>")
             
