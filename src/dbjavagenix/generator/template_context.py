@@ -338,9 +338,10 @@ class TemplateContextBuilder:
         return any(col.data_type.upper() in decimal_types for col in columns)
     
     def _is_string_type(self, db_type: str) -> bool:
-        """检查是否为字符串类型"""
+        """检查是否为字符串类型 (剥离 `(n)` 后比对, 修复 `VARCHAR(64)` 一直被判 False 的 bug)"""
         string_types = ['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT', 'MEDIUMTEXT', 'TINYTEXT', 'NVARCHAR', 'NCHAR']
-        return db_type.upper() in string_types
+        base_type = re.sub(r'\([^)]*\)', '', db_type.upper())
+        return base_type in string_types
     
     def _to_pascal_case(self, name: str) -> str:
         """转换为 PascalCase"""

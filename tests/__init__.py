@@ -1,0 +1,1 @@
+"""DBJavaGenix tests package"""
