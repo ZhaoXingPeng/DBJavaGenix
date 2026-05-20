@@ -1,0 +1,44 @@
+# Build context exclusions: 让 docker build 速度更快、镜像更小。
+# 与 .gitignore 不完全重合: 比如 tests/ 不进 git 但也不需要进运行镜像。
+
+.git
+.github
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+coverage.xml
+
+# 测试/开发产物
+tests/
+test_project/
+docs/
+iteration-plan/
+完成计划.md
+*.md
+!README.md
+
+# 本地虚拟环境与编辑器
+.venv
+venv
+.env
+.env.*
+.idea
+.vscode
+*.swp
+
+# Node (npm wrapper 不进运行镜像)
+node_modules
+package*.json
+index.js
+
+# 构建产物
+build/
+dist/

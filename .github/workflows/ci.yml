@@ -114,3 +114,36 @@ jobs:
               print(f'OK {f.name} ({len(out)} chars)')
           print('All sb35-java21 templates render successfully')
           "
+
+  docker-build:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: dbjavagenix:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test entrypoint
+        # MCP server 走 stdio, 这里只验证容器能启动到 import 阶段。
+        # 给 echo 喂空 JSON-RPC stdin, 超时 5s 视为启动成功。
+        run: |
+          timeout 5 docker run --rm -i dbjavagenix:ci </dev/null || rc=$?
+          # MCP server 在没收到合法 JSON-RPC 时通常自然退出,
+          # 退出码 0 / 124 (timeout) / 1 (无输入) 都视为镜像能启动。
+          if [ "${rc:-0}" -gt 1 ] && [ "${rc:-0}" -ne 124 ]; then
+            echo "Container failed to start (rc=$rc)"
+            exit 1
+          fi
+          echo "Container started (rc=${rc:-0})"

@@ -1,0 +1,49 @@
+version: "3.9"
+
+# 本地开发: 跑一个连着 MCP server 的 stdio 容器, 同时提供一个 MySQL
+# 测试数据库便于集成测试。
+#
+# 用法:
+#   docker compose up -d mysql      # 只启动数据库, 等待健康
+#   docker compose run --rm mcp     # 交互式运行 MCP server (stdio)
+#   docker compose down -v          # 清理
+
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dbjavagenix:dev
+    # MCP server 走 stdio, compose 下用 -it 保持交互
+    stdin_open: true
+    tty: true
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DBJAVAGENIX_LOG_LEVEL: ${DBJAVAGENIX_LOG_LEVEL:-INFO}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [dbjg]
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: dbjg-test-root
+      MYSQL_DATABASE: dbjavagenix_test
+      MYSQL_USER: dbjg
+      MYSQL_PASSWORD: dbjg-test
+    ports: ["3309:3306"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pdbjg-test-root"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [dbjg]
+
+volumes:
+  mysql_data:
+
+networks:
+  dbjg: {}
