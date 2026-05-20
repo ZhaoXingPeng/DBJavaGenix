@@ -1,14 +1,13 @@
 {
   "name": "dbjavagenix-mcp-server",
   "version": "0.1.1",
-  "description": "DBJavaGenix MCP Server for Cherry Studio and other MCP clients",
+  "description": "DBJavaGenix MCP Server (Node wrapper around the Python backend). For containerized usage prefer the Docker image.",
   "main": "index.js",
   "bin": {
     "dbjavagenix-mcp": "./index.js"
   },
   "scripts": {
-    "start": "node index.js",
-    "test": "node index.js --help"
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
@@ -29,10 +28,7 @@
   "author": "ZXP <2638265504@qq.com>",
   "license": "MIT",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
-  "dependencies": {
-    "@modelcontextprotocol/server-sequential-thinking": "^2025.7.1",
-    "dbjavagenix-mcp-server": "^0.1.0"
-  }
+  "dependencies": {}
 }

@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /**
- * DBJavaGenix MCP Server Entry Point
- * 作者: ZXP (2638265504@qq.com)
- * 用于Cherry Studio等MCP客户端的标准化入口
+ * DBJavaGenix MCP Server entry point
+ *
+ * MCP 协议走 stdio: 客户端把 JSON-RPC 写到子进程 stdin, 从 stdout 读响应。
+ * 任何 wrapper 启动信息必须写到 **stderr**, 否则会污染 stdout 上的 JSON-RPC 流,
+ * 客户端 (Cherry Studio / Claude Desktop / Cursor 等) 会解析失败。
  */
+
+'use strict';
 
 const { spawn } = require('child_process');
 const path = require('path');
@@ -12,61 +16,44 @@ const fs = require('fs');
 const projectDir = __dirname;
 const srcDir = path.join(projectDir, 'src');
 
-console.log('DBJavaGenix MCP Server v0.1.0');
-console.log('🚀 Starting server in stdio mode...');
-console.log(`📁 Project: ${projectDir}`);
-console.log(`📂 Source: ${srcDir}`);
+// 用 stderr 输出启动信息, stdout 留给 MCP JSON-RPC.
+const log = (...args) => process.stderr.write(args.join(' ') + '\n');
 
-// 验证项目结构
-if (!fs.existsSync(srcDir)) {
-  console.error('❌ Error: Source directory not found');
-  console.error(`Expected: ${srcDir}`);
+log('DBJavaGenix MCP Server v0.1.0');
+log('Starting Python backend in stdio mode...');
+
+if (!fs.existsSync(srcDir) || !fs.existsSync(path.join(srcDir, 'dbjavagenix'))) {
+  log('ERROR: dbjavagenix source not found at', srcDir);
+  log('  Did you `pip install -e .` or run from a checkout?');
   process.exit(1);
 }
 
-if (!fs.existsSync(path.join(srcDir, 'dbjavagenix'))) {
-  console.error('❌ Error: dbjavagenix module not found');
-  console.error(`Expected: ${path.join(srcDir, 'dbjavagenix')}`);
-  process.exit(1);
-}
-
-// 启动Python MCP服务器
-const python = spawn('python', ['-m', 'dbjavagenix.cli', 'server'], {
+const py = spawn('python', ['-m', 'dbjavagenix.cli', 'server'], {
   cwd: projectDir,
-  env: {
-    ...process.env,
-    PYTHONPATH: srcDir
-  },
-  stdio: 'inherit'
+  env: { ...process.env, PYTHONPATH: srcDir },
+  stdio: 'inherit',
 });
 
-python.on('error', (err) => {
-  console.error('❌ Failed to start Python MCP server:', err.message);
-  console.error('💡 Make sure Python is installed and available in PATH');
-  console.error('💡 Make sure dbjavagenix module is properly installed');
+py.on('error', (err) => {
+  log('ERROR: failed to spawn python:', err.message);
+  log('  Make sure python is on PATH and dbjavagenix module is installed.');
   process.exit(1);
 });
 
-python.on('close', (code) => {
-  if (code !== 0) {
-    console.error(`❌ Python process exited with code ${code}`);
-  }
-  process.exit(code);
+py.on('close', (code) => {
+  if (code !== 0) log(`Python process exited with code ${code}`);
+  process.exit(code === null ? 1 : code);
 });
 
-// 优雅关闭处理
-process.on('SIGINT', () => {
-  console.log('\n🛑 Received SIGINT, shutting down...');
-  python.kill('SIGINT');
-});
-
-process.on('SIGTERM', () => {
-  console.log('\n🛑 Received SIGTERM, shutting down...');
-  python.kill('SIGTERM');
-});
+const forward = (sig) => () => {
+  log(`Received ${sig}, forwarding to backend...`);
+  py.kill(sig);
+};
+process.on('SIGINT', forward('SIGINT'));
+process.on('SIGTERM', forward('SIGTERM'));
 
 process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught exception:', err);
-  python.kill('SIGTERM');
+  log('Uncaught exception:', err && err.stack ? err.stack : err);
+  py.kill('SIGTERM');
   process.exit(1);
 });
