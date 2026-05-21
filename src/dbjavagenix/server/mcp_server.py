@@ -41,6 +41,11 @@ from ..database.atomic_codegen_tools import (
     handle_codegen_render_controller,
     handle_codegen_render_mapper,
 )
+from ..database.discovery_tools import (
+    get_discovery_tools,
+    handle_search_tools,
+)
+from ..utils.tool_registry import filter_tools_for_listing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -74,9 +79,19 @@ async def handle_list_tools() -> list[Tool]:
 
     # Add SpringBoot project validation tools
     tools.extend(get_springboot_project_tools())
-    
-    logger.info(f"Listed {len(tools)} available tools")
-    return tools
+
+    # Add discovery tools (P2.3: search_tools for progressive disclosure)
+    tools.extend(get_discovery_tools())
+
+    # Apply progressive-mode filter (env DBJAVAGENIX_PROGRESSIVE=1)
+    visible_tools = filter_tools_for_listing(tools)
+    if len(visible_tools) != len(tools):
+        logger.info(
+            f"Progressive mode active: exposing {len(visible_tools)}/{len(tools)} tools"
+        )
+    else:
+        logger.info(f"Listed {len(tools)} available tools")
+    return visible_tools
 
 
 @server.call_tool()
@@ -148,6 +163,11 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             return await handle_springboot_analyze_dependencies(arguments)
         elif name == "springboot_read_config":
             return await handle_springboot_read_config(arguments)
+
+        # Discovery meta-tool (P2.3)
+        elif name == "search_tools":
+            return await handle_search_tools(arguments)
+
         else:
             raise ValueError(f"Unknown tool: {name}")
             
