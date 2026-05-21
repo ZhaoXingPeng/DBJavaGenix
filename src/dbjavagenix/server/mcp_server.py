@@ -32,6 +32,15 @@ from ..database.mcp_tools import (
     handle_springboot_analyze_dependencies,
     handle_springboot_read_config
 )
+from ..database.atomic_codegen_tools import (
+    get_atomic_codegen_tools,
+    handle_codegen_build_context,
+    handle_codegen_render_entity,
+    handle_codegen_render_dao,
+    handle_codegen_render_service,
+    handle_codegen_render_controller,
+    handle_codegen_render_mapper,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,10 +66,13 @@ async def handle_list_tools() -> list[Tool]:
     # Add table structure analysis tools
     tools.extend(get_table_analysis_tools())
     
-    # Add code generation tools
+    # Add code generation tools (legacy: db_codegen_analyze + db_codegen_generate)
     tools.extend(get_codegen_tools())
-    
-    # Add SpringBoot project validation tools  
+
+    # Add atomic code generation tools (P2.2: build_context + 5 render_* layers)
+    tools.extend(get_atomic_codegen_tools())
+
+    # Add SpringBoot project validation tools
     tools.extend(get_springboot_project_tools())
     
     logger.info(f"Listed {len(tools)} available tools")
@@ -106,11 +118,25 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         elif name == "db_table_indexes":
             return await handle_db_table_indexes(arguments)
         
-        # Code generation tools
+        # Code generation tools (legacy single-shot)
         elif name == "db_codegen_analyze":
             return await handle_db_codegen_analyze(arguments)
         elif name == "db_codegen_generate":
             return await handle_db_codegen_generate(arguments)
+
+        # Atomic code generation tools (P2.2)
+        elif name == "codegen_build_context":
+            return await handle_codegen_build_context(arguments)
+        elif name == "codegen_render_entity":
+            return await handle_codegen_render_entity(arguments)
+        elif name == "codegen_render_dao":
+            return await handle_codegen_render_dao(arguments)
+        elif name == "codegen_render_service":
+            return await handle_codegen_render_service(arguments)
+        elif name == "codegen_render_controller":
+            return await handle_codegen_render_controller(arguments)
+        elif name == "codegen_render_mapper":
+            return await handle_codegen_render_mapper(arguments)
         
         # (deprecated/removed) java_check_dependencies was never implemented here;
         # dependency analysis is covered by springboot_* tools.

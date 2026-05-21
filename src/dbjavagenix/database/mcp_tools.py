@@ -1436,7 +1436,12 @@ def get_codegen_tools() -> List[Tool]:
         ),
         Tool(
             name="db_codegen_generate",
-            description="Generate Java code from database table analysis using templates",
+            description=(
+                "[Legacy / single-shot] Generate Java code from database table analysis using templates. "
+                "Prefer the atomic workflow: codegen_build_context + codegen_render_entity/dao/service/"
+                "controller/mapper (P2.2). This single-shot tool also writes files to disk in one go, "
+                "with no preview/edit cycle."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
