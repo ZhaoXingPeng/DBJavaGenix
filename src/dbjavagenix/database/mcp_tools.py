@@ -2506,10 +2506,21 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         
         result_text += "\n💡 智能依赖管理: 自动检查、修复和优化项目依赖配置"
         
-        return [TextContent(
-            type="text",
-            text=result_text
-        )]
+        # P3.2: dashboard MCP App meta
+        from ..mcp_apps.dashboard import build_dependency_dashboard_data
+        from ..mcp_apps.meta_builder import attach_meta, build_mcp_app_meta
+        dashboard_data = build_dependency_dashboard_data(
+            health_report,
+            migration_guide.get("migration_suggestions", []) if isinstance(migration_guide, dict) else [],
+            (maven_xml_blocks.get("missing_dependencies", []) if isinstance(maven_xml_blocks, dict) else []),
+        )
+        dashboard_meta = build_mcp_app_meta(
+            "dashboard",
+            version="1.0",
+            data=dashboard_data,
+        )
+        content_obj = TextContent(type="text", text=result_text)
+        return [attach_meta(content_obj, dashboard_meta)]
         
     except Exception as e:
         logger.error(f"Unexpected error in springboot_analyze_dependencies: {e}")
