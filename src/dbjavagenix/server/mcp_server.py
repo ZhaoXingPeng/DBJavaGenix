@@ -45,6 +45,10 @@ from ..database.discovery_tools import (
     get_discovery_tools,
     handle_search_tools,
 )
+from ..database.visualization_tools import (
+    get_visualization_tools,
+    handle_db_render_er_diagram,
+)
 from ..utils.tool_registry import filter_tools_for_listing
 
 # Configure logging
@@ -79,6 +83,9 @@ async def handle_list_tools() -> list[Tool]:
 
     # Add SpringBoot project validation tools
     tools.extend(get_springboot_project_tools())
+
+    # Add visualization tools (P3.1: ER diagram via mcp-apps)
+    tools.extend(get_visualization_tools())
 
     # Add discovery tools (P2.3: search_tools for progressive disclosure)
     tools.extend(get_discovery_tools())
@@ -163,6 +170,10 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             return await handle_springboot_analyze_dependencies(arguments)
         elif name == "springboot_read_config":
             return await handle_springboot_read_config(arguments)
+
+        # Visualization tools (P3.1: MCP Apps)
+        elif name == "db_render_er_diagram":
+            return await handle_db_render_er_diagram(arguments)
 
         # Discovery meta-tool (P2.3)
         elif name == "search_tools":

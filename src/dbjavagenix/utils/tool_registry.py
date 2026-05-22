@@ -180,6 +180,13 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         always_visible=True,
         description_brief="按关键词搜索可用工具 (渐进式发现)",
     ),
+    # ---- 可视化 (P3 MCP Apps) ----
+    "db_render_er_diagram": ToolMetadata(
+        name="db_render_er_diagram",
+        tags={"er", "diagram", "mermaid", "visualize", "relations", "schema"},
+        category="visualization",
+        description_brief="生成多表 ER 图 (Mermaid, MCP App)",
+    ),
 }
 
 
