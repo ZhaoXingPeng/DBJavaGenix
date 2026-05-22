@@ -371,10 +371,24 @@ async def _render_single_layer(
                 "error": f"render failed: {e}",
             })
 
-    return [TextContent(
+    # P3.3: 附加 code-diff MCP App meta (合并模板未渲染失败的项)
+    from ..mcp_apps.code_diff import build_code_diff_data
+    from ..mcp_apps.meta_builder import attach_meta, build_mcp_app_meta
+
+    project_root = context.get("projectPath") or context.get("project_root")
+    diff_data = build_code_diff_data(files, language="java", project_root=project_root)
+    diff_meta = build_mcp_app_meta(
+        "code-diff",
+        language="java",
+        files=diff_data["files"],
+        version="1.0",
+    )
+
+    content = TextContent(
         type="text",
         text=json.dumps({"files": files, "language": "java"}, ensure_ascii=False, indent=2),
-    )]
+    )
+    return [attach_meta(content, diff_meta)]
 
 
 def _compute_file_path(

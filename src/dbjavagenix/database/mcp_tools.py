@@ -2000,10 +2000,24 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             result_text += "   • Update your pom.xml with missing/outdated dependencies\n"
             result_text += "   • Consider migrating from deprecated javax.* to jakarta.* packages\n"
         
-        return [TextContent(
-            type="text",
-            text=result_text
-        )]
+        # P3.4: package tree MCP App meta
+        from ..mcp_apps.package_tree import build_package_tree_data
+        from ..mcp_apps.meta_builder import attach_meta, build_mcp_app_meta
+        gen_file_paths = []
+        for _info in generated_files.values():
+            if "error" not in _info and "filename" in _info:
+                gen_file_paths.append(_info["filename"])
+        tree_data = build_package_tree_data(
+            gen_file_paths,
+            project_root=str(project_structure.get("project_root")) if project_structure.get("project_root") else None,
+        )
+        tree_meta = build_mcp_app_meta(
+            "tree",
+            version="1.0",
+            data=tree_data,
+        )
+        content_obj = TextContent(type="text", text=result_text)
+        return [attach_meta(content_obj, tree_meta)]
         
     except (DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
         error_response = {
