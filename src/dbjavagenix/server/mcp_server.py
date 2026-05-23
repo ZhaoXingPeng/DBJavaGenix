@@ -49,6 +49,10 @@ from ..database.visualization_tools import (
     get_visualization_tools,
     handle_db_render_er_diagram,
 )
+from ..database.ai_tools import (
+    get_ai_tools,
+    handle_ai_infer_business_names,
+)
 from ..utils.tool_registry import filter_tools_for_listing
 
 # Configure logging
@@ -86,6 +90,9 @@ async def handle_list_tools() -> list[Tool]:
 
     # Add visualization tools (P3.1: ER diagram via mcp-apps)
     tools.extend(get_visualization_tools())
+
+    # Add AI semantic tools (P4: naming inference, template recommendation, schema summary)
+    tools.extend(get_ai_tools())
 
     # Add discovery tools (P2.3: search_tools for progressive disclosure)
     tools.extend(get_discovery_tools())
@@ -174,6 +181,10 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         # Visualization tools (P3.1: MCP Apps)
         elif name == "db_render_er_diagram":
             return await handle_db_render_er_diagram(arguments)
+
+        # AI semantic tools (P4)
+        elif name == "ai_infer_business_names":
+            return await handle_ai_infer_business_names(arguments)
 
         # Discovery meta-tool (P2.3)
         elif name == "search_tools":

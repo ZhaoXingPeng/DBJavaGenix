@@ -187,6 +187,13 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         category="visualization",
         description_brief="生成多表 ER 图 (Mermaid, MCP App)",
     ),
+    # ---- AI 语义 (P4) ----
+    "ai_infer_business_names": ToolMetadata(
+        name="ai_infer_business_names",
+        tags={"ai", "infer", "naming", "class", "rule", "llm", "claude", "semantic"},
+        category="ai",
+        description_brief="推断业务 Java 命名 (规则 + 可选 Claude API)",
+    ),
 }
 
 
