@@ -206,6 +206,12 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         category="ai",
         description_brief="生成 schema 自然语言概述 (模块/核心实体/关系)",
     ),
+    "ai_metrics": ToolMetadata(
+        name="ai_metrics",
+        tags={"ai", "metrics", "monitoring", "cache", "tokens", "observability"},
+        category="ai",
+        description_brief="返回 AI 累积指标 (cache_hit_rate / tokens_saved)",
+    ),
 }
 
 

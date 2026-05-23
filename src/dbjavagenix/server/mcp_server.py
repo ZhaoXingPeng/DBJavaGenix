@@ -52,6 +52,7 @@ from ..database.visualization_tools import (
 from ..database.ai_tools import (
     get_ai_tools,
     handle_ai_infer_business_names,
+    handle_ai_metrics,
     handle_ai_recommend_template,
     handle_ai_summarize_schema,
 )
@@ -191,6 +192,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             return await handle_ai_recommend_template(arguments)
         elif name == "ai_summarize_schema":
             return await handle_ai_summarize_schema(arguments)
+        elif name == "ai_metrics":
+            return await handle_ai_metrics(arguments)
 
         # Discovery meta-tool (P2.3)
         elif name == "search_tools":

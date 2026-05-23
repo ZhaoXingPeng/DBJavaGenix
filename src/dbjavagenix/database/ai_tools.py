@@ -144,6 +144,25 @@ def get_ai_tools() -> List[Tool]:
                 "required": ["table_names"],
             },
         ),
+        Tool(
+            name="ai_metrics",
+            description=(
+                "返回进程内累积的 AI 调用指标 (Prompt Caching 命中率、token 消耗、错误次数)。"
+                "对应 P4.4: ai.cache_hit_rate / ai.tokens_saved_via_cache 等。"
+                "可在每次 ai_infer_business_names 等工具调用后查询。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "reset": {
+                        "type": "boolean",
+                        "description": "查询后是否重置计数 (默认 false)",
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        ),
     ]
 
 
@@ -302,6 +321,31 @@ async def handle_ai_summarize_schema(arguments: Dict[str, Any]) -> List[TextCont
         "core_entities": summary.core_entities,
         "relationships": summary.relationships,
     }
+    return [TextContent(
+        type="text",
+        text=json.dumps(response, ensure_ascii=False, indent=2),
+    )]
+
+
+async def handle_ai_metrics(arguments: Dict[str, Any]) -> List[TextContent]:
+    """返回 GLOBAL_LLM_STATS 快照, 可选 reset"""
+    snapshot = GLOBAL_LLM_STATS.snapshot()
+    response = {
+        "metrics": snapshot,
+        "llm_available": is_llm_available(),
+        "note": (
+            "ai.cache_hit_rate = cache_read / (cache_read + cache_creation + plain_input). "
+            "Prompt caching 5min TTL,5 分钟内的连续调用会命中。"
+        ),
+    }
+    if arguments.get("reset"):
+        GLOBAL_LLM_STATS.total_calls = 0
+        GLOBAL_LLM_STATS.total_input_tokens = 0
+        GLOBAL_LLM_STATS.total_output_tokens = 0
+        GLOBAL_LLM_STATS.total_cache_read = 0
+        GLOBAL_LLM_STATS.total_cache_creation = 0
+        GLOBAL_LLM_STATS.total_errors = 0
+        response["reset"] = True
     return [TextContent(
         type="text",
         text=json.dumps(response, ensure_ascii=False, indent=2),
