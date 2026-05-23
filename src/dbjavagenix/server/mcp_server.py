@@ -52,6 +52,8 @@ from ..database.visualization_tools import (
 from ..database.ai_tools import (
     get_ai_tools,
     handle_ai_infer_business_names,
+    handle_ai_recommend_template,
+    handle_ai_summarize_schema,
 )
 from ..utils.tool_registry import filter_tools_for_listing
 
@@ -185,6 +187,10 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         # AI semantic tools (P4)
         elif name == "ai_infer_business_names":
             return await handle_ai_infer_business_names(arguments)
+        elif name == "ai_recommend_template":
+            return await handle_ai_recommend_template(arguments)
+        elif name == "ai_summarize_schema":
+            return await handle_ai_summarize_schema(arguments)
 
         # Discovery meta-tool (P2.3)
         elif name == "search_tools":

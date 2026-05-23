@@ -194,6 +194,18 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         category="ai",
         description_brief="推断业务 Java 命名 (规则 + 可选 Claude API)",
     ),
+    "ai_recommend_template": ToolMetadata(
+        name="ai_recommend_template",
+        tags={"ai", "recommend", "template", "pattern", "rbac", "ecommerce", "cms"},
+        category="ai",
+        description_brief="按 schema 模式推荐 template_category + 生成选项",
+    ),
+    "ai_summarize_schema": ToolMetadata(
+        name="ai_summarize_schema",
+        tags={"ai", "summarize", "schema", "overview", "narrative", "modules"},
+        category="ai",
+        description_brief="生成 schema 自然语言概述 (模块/核心实体/关系)",
+    ),
 }
 
 

@@ -29,6 +29,8 @@ from ..ai.naming_rules import (
     NamingInference,
     infer_business_names_batch,
 )
+from ..ai.schema_summary import summarize_schema
+from ..ai.template_recommender import recommend_template
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,65 @@ def get_ai_tools() -> List[Tool]:
                     },
                 },
                 "required": ["tables"],
+            },
+        ),
+        Tool(
+            name="ai_recommend_template",
+            description=(
+                "根据整库表名 + FK 关系推荐 template_category (Default/MybatisPlus/MybatisPlus-Mixed/sb35-java21) "
+                "+ 生成选项 (useSwagger/useLombok/include_mapstruct/generate_dto/generate_vo)。"
+                "检测 RBAC / 电商 / CMS / 工单 等典型业务模式。"
+                "传 hint_modern_stack=true 强制推 sb35-java21 (Java 21 + jakarta)。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "table_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "整库表名列表",
+                        "minItems": 1,
+                    },
+                    "foreign_keys": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "可选, [{from_table, to_table, ...}]",
+                    },
+                    "hint_modern_stack": {
+                        "type": "boolean",
+                        "description": "用户偏好 Java 21 / Spring Boot 3.x → 强制推 sb35-java21",
+                        "default": False,
+                    },
+                },
+                "required": ["table_names"],
+            },
+        ),
+        Tool(
+            name="ai_summarize_schema",
+            description=(
+                "对整库 schema 做自然语言概述: 总览、模块划分 (按前缀)、核心实体 (列数 + 命中模式)、关键关系。"
+                "便于用户理解大库,或在生成前对齐 LLM 的 mental model。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "table_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "整库表名列表",
+                        "minItems": 1,
+                    },
+                    "foreign_keys": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "可选 FK 关系 [{from_table, to_table, ...}]",
+                    },
+                    "table_column_counts": {
+                        "type": "object",
+                        "description": "可选, {表名: 列数} 用于推断核心实体",
+                    },
+                },
+                "required": ["table_names"],
             },
         ),
     ]
@@ -176,3 +237,72 @@ def _merge_inference(
         "confidence": 0.9,
     }
     return merged
+
+
+# ============================================================
+# P4.2 / P4.3 handlers
+# ============================================================
+
+async def handle_ai_recommend_template(arguments: Dict[str, Any]) -> List[TextContent]:
+    """根据整库 schema 推荐模板分类 + 生成选项"""
+    table_names = arguments.get("table_names", [])
+    foreign_keys = arguments.get("foreign_keys", [])
+    hint_modern = bool(arguments.get("hint_modern_stack", False))
+
+    if not table_names:
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "table_names is required and non-empty"}, ensure_ascii=False),
+        )]
+
+    rec = recommend_template(
+        table_names=table_names,
+        foreign_keys=foreign_keys,
+        hint_modern_stack=hint_modern,
+    )
+    response = {
+        "recommended_template": rec.template,
+        "options": rec.options,
+        "matched_pattern": rec.pattern,
+        "confidence": rec.confidence,
+        "score": rec.score,
+        "reasons": rec.reasons,
+        "matched_tables": rec.matched_tables,
+    }
+    return [TextContent(
+        type="text",
+        text=json.dumps(response, ensure_ascii=False, indent=2),
+    )]
+
+
+async def handle_ai_summarize_schema(arguments: Dict[str, Any]) -> List[TextContent]:
+    """生成自然语言 schema 描述"""
+    table_names = arguments.get("table_names", [])
+    foreign_keys = arguments.get("foreign_keys", [])
+    table_column_counts = arguments.get("table_column_counts", {})
+
+    if not table_names:
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "table_names is required and non-empty"}, ensure_ascii=False),
+        )]
+
+    summary = summarize_schema(
+        table_names=table_names,
+        foreign_keys=foreign_keys,
+        table_column_counts=table_column_counts,
+    )
+
+    response = {
+        "narrative": summary.narrative,
+        "total_tables": summary.total_tables,
+        "detected_pattern": summary.detected_pattern,
+        "pattern_confidence": summary.pattern_confidence,
+        "modules": summary.modules,
+        "core_entities": summary.core_entities,
+        "relationships": summary.relationships,
+    }
+    return [TextContent(
+        type="text",
+        text=json.dumps(response, ensure_ascii=False, indent=2),
+    )]
