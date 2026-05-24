@@ -56,10 +56,17 @@ from ..database.ai_tools import (
     handle_ai_recommend_template,
     handle_ai_summarize_schema,
 )
+from ..database.observability_tools import (
+    get_observability_tools,
+    handle_server_health,
+    handle_server_metrics,
+)
+from ..utils.metrics import GLOBAL_TOOL_METRICS
+from ..utils.logging_config import configure_logging
 from ..utils.tool_registry import filter_tools_for_listing
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging (P5.2: plain / json via DBJAVAGENIX_LOG_FORMAT)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 # Create MCP server instance
@@ -97,6 +104,9 @@ async def handle_list_tools() -> list[Tool]:
     # Add AI semantic tools (P4: naming inference, template recommendation, schema summary)
     tools.extend(get_ai_tools())
 
+    # Add observability tools (P5: server_metrics, server_health)
+    tools.extend(get_observability_tools())
+
     # Add discovery tools (P2.3: search_tools for progressive disclosure)
     tools.extend(get_discovery_tools())
 
@@ -124,7 +134,9 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         Tool execution results
     """
     logger.info(f"Calling tool: {name} with arguments: {arguments}")
-    
+    import time as _time_for_metrics
+    _start_perf = _time_for_metrics.perf_counter()
+    _is_error = False
     try:
         # Database connection and query tools
         if name == "db_connect_test":
@@ -195,6 +207,12 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         elif name == "ai_metrics":
             return await handle_ai_metrics(arguments)
 
+        # Observability tools (P5)
+        elif name == "server_metrics":
+            return await handle_server_metrics(arguments)
+        elif name == "server_health":
+            return await handle_server_health(arguments)
+
         # Discovery meta-tool (P2.3)
         elif name == "search_tools":
             return await handle_search_tools(arguments)
@@ -203,11 +221,15 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             raise ValueError(f"Unknown tool: {name}")
             
     except Exception as e:
+        _is_error = True
         logger.error(f"Tool execution failed: {e}")
         return [TextContent(
             type="text",
             text=f"Tool execution failed: {str(e)}"
         )]
+    finally:
+        _duration_ms = (_time_for_metrics.perf_counter() - _start_perf) * 1000
+        GLOBAL_TOOL_METRICS.record(name, _duration_ms, _is_error)
 
 
 async def run_server():

@@ -212,6 +212,20 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         category="ai",
         description_brief="返回 AI 累积指标 (cache_hit_rate / tokens_saved)",
     ),
+    # ---- 可观测性 (P5) ----
+    "server_metrics": ToolMetadata(
+        name="server_metrics",
+        tags={"server", "metrics", "monitoring", "stats", "calls", "duration", "observability"},
+        category="observability",
+        description_brief="返回 server 工具调用指标 (calls/avg_duration/error_rate)",
+    ),
+    "server_health": ToolMetadata(
+        name="server_health",
+        tags={"server", "health", "status", "check", "smoke", "diagnostic"},
+        category="observability",
+        always_visible=False,
+        description_brief="server 健康检查 (Python/mcp 版本/模块导入状态)",
+    ),
 }
 
 
