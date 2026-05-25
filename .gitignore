@@ -188,6 +188,5 @@ logs/
 secrets/
 
 test_project/
-tests/
 node_modules/
 examples/
