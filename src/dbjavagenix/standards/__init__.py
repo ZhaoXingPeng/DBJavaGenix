@@ -7,9 +7,9 @@ The MCP tool wrapper lives in `dbjavagenix.database.standards_tools`.
 """
 
 from .checkstyle import generate_checkstyle_xml, generate_suppressions_xml
-from .spotbugs import generate_spotbugs_exclude_xml
 from .editorconfig import generate_editorconfig
 from .lombok import generate_lombok_config
+from .spotbugs import generate_spotbugs_exclude_xml
 
 __all__ = [
     "generate_checkstyle_xml",
