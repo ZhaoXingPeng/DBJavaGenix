@@ -174,6 +174,9 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 | [docs/deployment.md](docs/deployment.md) | 部署模式 / 环境变量 / 健康检查 / 排障 |
 | [docs/benchmarks/token-usage.md](docs/benchmarks/token-usage.md) | tool schema token 测量 |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | MCP Apps 4 组件客户端兼容性 |
+| [docs/algorithms-overview.md](docs/algorithms-overview.md) | v0.2.1 schema 图算法 (topo / cluster / cycle) |
+| [docs/design-patterns-catalog.md](docs/design-patterns-catalog.md) | 生成器与生成代码中的设计模式 |
+| [docs/adr/](docs/adr/) | 7 个 ADR (架构 / 原子 / 渐进 / 规则 / 不引依赖 / schema 算法 / 规范配置) |
 | [.claude/skills/java-codegen-from-db/SKILL.md](.claude/skills/java-codegen-from-db/SKILL.md) | 主 Skill: 代码生成 5 阶段工作流 |
 | [.claude/skills/springboot-migration/SKILL.md](.claude/skills/springboot-migration/SKILL.md) | 第二 Skill: Spring Boot 2.7→3.x 迁移 |
 
@@ -185,6 +188,7 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 - [x] **Phase 4**: AI 语义增强 (规则 + 可选 LLM)
 - [x] **Phase 5**: 可观测性 + 生产就绪
 - [x] **Phase 6**: 文档与演示
+- [x] **v0.2.1**: Java 工程补完 (schema 算法 3 个 / 工程规范配置生成器 / 设计模式 catalog)
 
 下一步 (v0.3 候选):
 - DB 后端扩展: PostgreSQL / Oracle 完整支持
