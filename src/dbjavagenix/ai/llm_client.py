@@ -147,6 +147,7 @@ def infer_names_via_llm(
     tables: List[Dict[str, Any]],
     model: str = "claude-sonnet-4-6",
     max_tokens: int = 4096,
+    cache_ttl: str = "5m",
 ) -> Optional[LLMResult]:
     """用 Claude API 推断业务命名 (启用 prompt caching)。
 
@@ -154,10 +155,14 @@ def infer_names_via_llm(
         tables: [{name, columns, foreign_keys}] 列表
         model: Anthropic 模型 ID
         max_tokens: 最大输出 token
+        cache_ttl: prompt caching TTL,"5m" (默认,免费) 或 "1h" (cache write +25%
+                   但跨会话命中)。1h 适合用户一天内多次生成代码的场景。
 
     Returns:
         LLMResult 或 None (key 缺失 / 调用失败时)
     """
+    if cache_ttl not in ("5m", "1h"):
+        raise ValueError(f"cache_ttl must be '5m' or '1h', got {cache_ttl!r}")
     if not is_llm_available():
         logger.info("LLM not available: ANTHROPIC_API_KEY missing or anthropic SDK not installed")
         return None
@@ -175,6 +180,9 @@ def infer_names_via_llm(
 
     try:
         client = anthropic.Anthropic()
+        cache_control_block = {"type": "ephemeral"}
+        if cache_ttl == "1h":
+            cache_control_block["ttl"] = "1h"
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
@@ -182,7 +190,7 @@ def infer_names_via_llm(
                 {
                     "type": "text",
                     "text": NAMING_SYSTEM_PROMPT,
-                    "cache_control": {"type": "ephemeral"},
+                    "cache_control": cache_control_block,
                 }
             ],
             messages=[
