@@ -176,7 +176,7 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 | [docs/screenshots/README.md](docs/screenshots/README.md) | MCP Apps 4 组件客户端兼容性 |
 | [docs/algorithms-overview.md](docs/algorithms-overview.md) | v0.2.1 schema 图算法 (topo / cluster / cycle) |
 | [docs/design-patterns-catalog.md](docs/design-patterns-catalog.md) | 生成器与生成代码中的设计模式 |
-| [docs/adr/](docs/adr/) | 7 个 ADR (架构 / 原子 / 渐进 / 规则 / 不引依赖 / schema 算法 / 规范配置) |
+| [docs/adr/](docs/adr/) | 10 个 ADR (架构 / 原子 / 渐进 / 规则 / 不引依赖 / schema 算法 / 规范配置 / MCP v3 / 1h 缓存 / agentic) |
 | [.claude/skills/java-codegen-from-db/SKILL.md](.claude/skills/java-codegen-from-db/SKILL.md) | 主 Skill: 代码生成 5 阶段工作流 |
 | [.claude/skills/springboot-migration/SKILL.md](.claude/skills/springboot-migration/SKILL.md) | 第二 Skill: Spring Boot 2.7→3.x 迁移 |
 
@@ -189,12 +189,23 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 - [x] **Phase 5**: 可观测性 + 生产就绪
 - [x] **Phase 6**: 文档与演示
 - [x] **v0.2.1**: Java 工程补完 (schema 算法 3 个 / 工程规范配置生成器 / 设计模式 catalog)
+- [x] **v0.2.2**: MCP v3 + AI 工程化 (elicitation 表单 / sampling 借 LLM / 1h prompt caching / agentic-runner)
 
 下一步 (v0.3 候选):
 - DB 后端扩展: PostgreSQL / Oracle 完整支持
 - 抓取 Claude Desktop / Cursor 截图入仓 (P3.5 收尾)
 - 集成测试: 用 Testcontainers 把 MySQL 拉起跑端到端
 - 性能: 把规则推断与 LLM 路径合并为同一返回 schema (current LLM 路径输出格式与规则略不同)
+- agentic-runner 加 subagent 支持 (Agent SDK 已就绪)
+
+## 启动模式
+
+| 模式 | 入口 | 触发 | 依赖 | 适用场景 |
+|------|------|------|------|---------|
+| MCP server | `dbjavagenix server` | 客户端连接 (Claude Desktop / Cursor 等) | 无额外 | 探索 / 多轮交互 / 默认 |
+| Agentic runner | `server.agentic_runner.run_agentic()` | CLI 单次启动 | `claude-agent-sdk` + `ANTHROPIC_API_KEY` | 批处理 / CI / 一次性任务 |
+
+两种模式共用同一 `database.mcp_tools` 注册表 (ADR-010)。
 
 ## 调试技巧
 
