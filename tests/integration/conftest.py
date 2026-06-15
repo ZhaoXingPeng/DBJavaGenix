@@ -125,3 +125,39 @@ def mysql_container(request, existing_db_config):
             "database_type": "mysql",
         }
         yield config
+
+
+@pytest.fixture(scope="session")
+def postgres_container(request, existing_db_config):
+    """PostgreSQL counterpart of mysql_container. Same resolution order."""
+    if request.config.getoption("--no-docker"):
+        pytest.skip("--no-docker passed")
+
+    if existing_db_config and existing_db_config["database_type"] == "postgresql":
+        if not _port_open(existing_db_config["host"], existing_db_config["port"]):
+            pytest.skip(
+                f"DBJAVAGENIX_TEST_DB_HOST={existing_db_config['host']}:"
+                f"{existing_db_config['port']} not reachable"
+            )
+        yield existing_db_config
+        return
+
+    if not _testcontainers_available():
+        pytest.skip(
+            "testcontainers not installed (pip install dbjavagenix[integration])"
+        )
+    if not _docker_available():
+        pytest.skip("Docker not available")
+
+    from testcontainers.postgres import PostgresContainer  # type: ignore
+
+    with PostgresContainer("postgres:16-alpine") as container:
+        config = {
+            "host": container.get_container_host_ip(),
+            "port": int(container.get_exposed_port(5432)),
+            "username": container.username,
+            "password": container.password,
+            "database": container.dbname,
+            "database_type": "postgresql",
+        }
+        yield config
