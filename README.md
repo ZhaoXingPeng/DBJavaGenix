@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zhaoxingpeng-dbjavagenix-badge.png)](https://mseep.ai/app/zhaoxingpeng-dbjavagenix)
+
 # DBJavaGenix
 
 > 把"用 LLM 看着数据库做反向工程"做成一件可重复、可审计的事。
