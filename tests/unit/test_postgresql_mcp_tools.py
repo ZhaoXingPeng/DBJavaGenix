@@ -89,6 +89,28 @@ async def test_query_tables_uses_catalog_and_parameters(monkeypatch, postgres_in
 
 
 @pytest.mark.asyncio
+async def test_query_tables_applies_schema_filter_with_bound_parameter(monkeypatch, postgres_info):
+    calls = []
+    monkeypatch.setattr(
+        mcp_tools.connection_manager, "get_connection_info", lambda cid: postgres_info
+    )
+
+    def execute_query(connection_id, query, params=None):
+        calls.append((connection_id, query, params))
+        return [{"table_name": "tenant_users"}]
+
+    monkeypatch.setattr(mcp_tools.connection_manager, "execute_query", execute_query)
+
+    response = await mcp_tools.handle_db_query_tables(
+        {"connection_id": "pg-1", "database": "app", "schema": "tenant_a"}
+    )
+
+    assert "tenant_users" in response[0].text
+    assert "table_schema = %s" in calls[0][1]
+    assert calls[0][2] == ("app", "tenant_a")
+
+
+@pytest.mark.asyncio
 async def test_table_exists_uses_postgresql_catalog(monkeypatch, postgres_info):
     calls = []
     monkeypatch.setattr(

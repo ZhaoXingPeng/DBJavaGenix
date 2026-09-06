@@ -337,9 +337,10 @@ def list_tables(
 
         # Get table list
         if db_config.database:
-            tables_result = handle_db_query_tables(
-                {"connection_id": connection_id, "database": db_config.database}
-            )
+            table_query = {"connection_id": connection_id, "database": db_config.database}
+            if schema:
+                table_query["schema"] = schema
+            tables_result = handle_db_query_tables(table_query)
 
             if tables_result.get("success"):
                 tables = tables_result["tables"]

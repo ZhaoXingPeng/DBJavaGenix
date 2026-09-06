@@ -240,6 +240,10 @@ def get_connection_tools() -> List[Tool]:
                     "database": {
                         "type": "string",
                         "description": "Database name"
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional)"
                     }
                 },
                 "required": ["connection_id", "database"]
@@ -644,6 +648,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
     try:
         connection_id = arguments["connection_id"]
         database = arguments["database"]
+        schema = arguments.get("schema")
         
         # Get connection info to determine database type
         config = connection_manager.get_connection_info(connection_id)
@@ -651,6 +656,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
             raise DatabaseConnectionError(f"Connection {connection_id} not found")
         
         # Query tables based on database type
+        schema_filter = "AND table_schema = %s" if schema else ""
         if config.type == DatabaseType.MYSQL:
             query = f"SHOW TABLES FROM `{database}`"
             params = None
@@ -662,9 +668,10 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
             WHERE table_catalog = %s
               AND table_type = 'BASE TABLE'
               AND table_schema NOT IN ('pg_catalog', 'information_schema')
+              {schema_filter}
             ORDER BY table_schema, table_name
-            """
-            params = (database,)
+            """.format(schema_filter=schema_filter)
+            params = (database, schema) if schema else (database,)
         elif config.type == DatabaseType.SQLITE:
             query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
             params = None
@@ -687,13 +694,15 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         response = {
             "success": True,
             "database": database,
+            "schema": schema,
             "tables": tables,
             "count": len(tables)
         }
         
         return [TextContent(
             type="text",
-            text=f"Found {len(tables)} tables in database '{database}':\n" +
+            text=f"Found {len(tables)} tables in database '{database}'" +
+                 (f" schema '{schema}'" if schema else "") + ":\n" +
                  "\n".join(f"- {table}" for table in tables) +
                  f"\n\nRaw Response: {response}"
         )]
