@@ -274,3 +274,45 @@ def test_generate_uses_current_codegen_contract(monkeypatch):
     assert all(call["template_category"] == "Default" for call in calls["generate"])
     assert all("table_analysis" not in call for call in calls["generate"])
     assert calls["close"] == ["conn-1"]
+
+
+def test_generate_forwards_schema_to_listing_and_generation(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    calls = {"query": [], "generate": [], "close": []}
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=_fake_config)
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_connect_test",
+        lambda _args: {"success": True, "connection_id": "conn-1"},
+    )
+
+    def fake_query(arguments):
+        calls["query"].append(arguments)
+        return {"success": True, "tables": ["users"]}
+
+    monkeypatch.setattr(mod, "handle_db_query_tables", fake_query)
+
+    def fake_generate(arguments):
+        calls["generate"].append(arguments)
+        return {"success": True}
+
+    monkeypatch.setattr(mod, "handle_db_codegen_generate", fake_generate)
+    monkeypatch.setattr(mod.connection_manager, "close_connection", calls["close"].append)
+
+    mod.generate(
+        tables=None,
+        config_path=None,
+        schema="tenant_a",
+        output_dir=None,
+        package_name=None,
+        dry_run=False,
+    )
+
+    assert calls["query"] == [
+        {"connection_id": "conn-1", "database": ":memory:", "schema": "tenant_a"}
+    ]
+    assert calls["generate"][0]["schema"] == "tenant_a"
+    assert calls["close"] == ["conn-1"]
