@@ -104,7 +104,13 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: "0.8.x"
+          enable-cache: true
+
+      - name: Set up Python and Ruff
+        run: |
+          uv python install 3.12
+          uv venv --python 3.12
+          uv pip install "ruff>=0.8"
 
       - name: Check changed Python files
         run: |
@@ -122,7 +128,7 @@ jobs:
             echo "No Python files changed"
           else
             printf 'Formatting %s\n' "${files[@]}"
-            uvx ruff==0.8.6 format --check "${files[@]}"
+            uv run ruff format --check "${files[@]}"
           fi
 
   integration:
