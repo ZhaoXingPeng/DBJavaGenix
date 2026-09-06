@@ -135,6 +135,7 @@ def generate(
     config_path: Optional[str] = typer.Option(
         None, "--config", "-c", help="Configuration file path"
     ),
+    schema: Optional[str] = typer.Option(None, "--schema", "-s", help="Database schema"),
     output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
     package_name: Optional[str] = typer.Option(None, "--package", "-p", help="Java package name"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be generated"),
@@ -192,9 +193,10 @@ def generate(
         if tables:
             target_tables = tables
         else:
-            tables_result = handle_db_query_tables(
-                {"connection_id": connection_id, "database": db_config.database}
-            )
+            table_query = {"connection_id": connection_id, "database": db_config.database}
+            if schema:
+                table_query["schema"] = schema
+            tables_result = handle_db_query_tables(table_query)
 
             if tables_result.get("success"):
                 all_tables = tables_result["tables"]
@@ -229,19 +231,20 @@ def generate(
 
                 try:
                     # Generate code
-                    generate_result = handle_db_codegen_generate(
-                        {
-                            "connection_id": connection_id,
-                            "table_name": table_name,
-                            "database": db_config.database,
-                            "template_category": "Default",
-                            "author": config.generation.author,
-                            "package_name": config.generation.package_name,
-                            "include_swagger": True,
-                            "include_lombok": True,
-                            "include_mapstruct": False,
-                        }
-                    )
+                    generation_args = {
+                        "connection_id": connection_id,
+                        "table_name": table_name,
+                        "database": db_config.database,
+                        "template_category": "Default",
+                        "author": config.generation.author,
+                        "package_name": config.generation.package_name,
+                        "include_swagger": True,
+                        "include_lombok": True,
+                        "include_mapstruct": False,
+                    }
+                    if schema:
+                        generation_args["schema"] = schema
+                    generate_result = handle_db_codegen_generate(generation_args)
 
                     if _codegen_result_succeeded(generate_result):
                         generated_tables.append(table_name)
