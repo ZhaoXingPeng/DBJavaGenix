@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible problem
+title: ":bug: fix: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先搜索现有 Issue。安全漏洞请使用 SECURITY.md 中的私下报告流程。
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: 受影响的版本、commit 或镜像 tag。
+      placeholder: v0.2.2 / ded9df3
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and expected behavior
+      description: 描述实际行为、预期行为和业务影响。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: 提供最小复现步骤、输入和完整错误信息（请脱敏）。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Python、操作系统、数据库、安装方式和相关配置。
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight
+      options:
+        - label: 我已搜索现有 Issue，确认没有重复报告。
+          required: true
+        - label: 我已移除日志、配置和样例中的密钥或密码。
+          required: true
