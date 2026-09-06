@@ -179,6 +179,14 @@ def test_postgresql_introspection_uses_catalog_queries():
     assert all("SHOW TABLES" not in query for query, _ in manager.calls)
 
 
+def test_postgresql_table_references_keep_schema():
+    manager = RecordingManager()
+
+    references = DatabaseIntrospector(manager).list_table_references("pg-1")
+
+    assert references == [{"name": "users", "schema": "public"}]
+
+
 class SchemaAwarePostgresManager(RecordingManager):
     def execute_query(self, connection_id, query, params=None):
         self.calls.append((query, params))

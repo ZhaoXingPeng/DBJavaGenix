@@ -14,6 +14,12 @@ class _FakeIntrospector:
     def list_tables(self, _connection_id):
         return ["users", "broken"]
 
+    def list_table_references(self, _connection_id):
+        return [
+            {"name": "users", "schema": None},
+            {"name": "broken", "schema": None},
+        ]
+
 
 class _SchemaAwareIntrospector:
     """Record metadata calls so schema forwarding stays observable in one test."""
@@ -68,6 +74,7 @@ class _BatchAnalyzer(CodegenAnalyzer):
         all_table_names=None,
         template_category="Default",
         project_root=None,
+        schema=None,
     ):
         if table_name == "broken":
             raise RuntimeError("metadata unavailable")
@@ -86,6 +93,53 @@ async def test_batch_analysis_keeps_success_and_error_accounting():
     }
     assert result["tables"]["users"]["table_name"] == "users"
     assert result["tables"]["broken"]["error"] == "metadata unavailable"
+
+
+class _PostgresBatchAnalyzer(CodegenAnalyzer):
+    def __init__(self):
+        super().__init__(connection_manager=object())
+        self.introspector = type(
+            "PostgresIntrospector",
+            (),
+            {
+                "list_table_references": lambda _self, _connection_id: [
+                    {"name": "users", "schema": "tenant_a"},
+                    {"name": "users", "schema": "tenant_b"},
+                ]
+            },
+        )()
+        self.calls = []
+
+    async def analyze_table_for_codegen(
+        self,
+        connection_id,
+        table_name,
+        all_table_names=None,
+        template_category="Default",
+        project_root=None,
+        schema=None,
+    ):
+        self.calls.append((connection_id, table_name, schema))
+        return {"table_name": table_name, "table_info": {"schema": schema}}
+
+
+@pytest.mark.asyncio
+async def test_batch_analysis_keeps_postgresql_schema_identity():
+    analyzer = _PostgresBatchAnalyzer()
+
+    result = await analyzer.analyze_database_for_codegen("pg-1")
+
+    assert analyzer.calls == [
+        ("pg-1", "users", "tenant_a"),
+        ("pg-1", "users", "tenant_b"),
+    ]
+    assert result["database_info"] == {
+        "total_tables": 2,
+        "analyzed_tables": 2,
+        "success_count": 2,
+        "error_count": 0,
+    }
+    assert set(result["tables"]) == {"tenant_a.users", "tenant_b.users"}
 
 
 @pytest.mark.asyncio

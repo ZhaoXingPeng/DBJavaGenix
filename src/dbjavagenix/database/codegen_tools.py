@@ -97,20 +97,40 @@ class CodegenAnalyzer:
     ) -> Dict[str, Any]:
         """分析整个数据库，返回所有表的代码生成信息"""
 
-        # 获取所有表
-        all_tables = self.introspector.list_tables(connection_id)
+        # PostgreSQL table names are scoped by schema. Keep that identity through
+        # batch analysis so equally named tables cannot become ambiguous or overwrite
+        # one another in the returned mapping.
+        all_table_references = self.introspector.list_table_references(connection_id)
 
-        tables_to_analyze = [t for t in all_tables if not table_filter or t in table_filter]
+        def table_key(reference: Dict[str, str | None]) -> str:
+            return (
+                f"{reference['schema']}.{reference['name']}"
+                if reference["schema"]
+                else reference["name"]
+            )
+
+        tables_to_analyze = [
+            reference
+            for reference in all_table_references
+            if not table_filter
+            or reference["name"] in table_filter
+            or table_key(reference) in table_filter
+        ]
         analysis_results = {}
-        for name in tables_to_analyze:
+        for reference in tables_to_analyze:
+            name = reference["name"]
+            schema = reference["schema"]
+            result_key = table_key(reference)
             try:
-                analysis_results[name] = await self.analyze_table_for_codegen(connection_id, name)
+                analysis_results[result_key] = await self.analyze_table_for_codegen(
+                    connection_id, name, schema=schema
+                )
             except Exception as exc:
-                analysis_results[name] = {"error": str(exc)}
+                analysis_results[result_key] = {"error": str(exc)}
 
         return {
             "database_info": {
-                "total_tables": len(all_tables),
+                "total_tables": len(all_table_references),
                 "analyzed_tables": len(tables_to_analyze),
                 "success_count": sum("error" not in item for item in analysis_results.values()),
                 "error_count": sum("error" in item for item in analysis_results.values()),
