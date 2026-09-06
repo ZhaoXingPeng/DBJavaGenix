@@ -94,10 +94,7 @@ async def handle_db_render_er_diagram(arguments: Dict[str, Any]) -> List[TextCon
         mermaid_source = render_er_diagram(er_tables, all_fks)
         summary = render_summary_text(er_tables, all_fks)
 
-        text = (
-            f"{summary}\n\n"
-            f"```mermaid\n{mermaid_source}\n```"
-        )
+        text = f"{summary}\n\n```mermaid\n{mermaid_source}\n```"
         content = TextContent(type="text", text=text)
         meta = build_mcp_app_meta(
             "mermaid",
@@ -107,16 +104,20 @@ async def handle_db_render_er_diagram(arguments: Dict[str, Any]) -> List[TextCon
         return [attach_meta(content, meta)]
 
     except (DatabaseConnectionError, MCPServiceError) as e:
-        return [TextContent(
-            type="text",
-            text=f"Failed to render ER diagram: {e}",
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to render ER diagram: {e}",
+            )
+        ]
     except Exception as e:  # noqa: BLE001
         logger.error(f"db_render_er_diagram unexpected error: {e}")
-        return [TextContent(
-            type="text",
-            text=f"Unexpected error: {e}",
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=f"Unexpected error: {e}",
+            )
+        ]
 
 
 def _collect_table_for_er(
@@ -137,12 +138,14 @@ def _collect_table_for_er(
         is_fk = c["name"] in fk_column_names
         if not include_non_pk and not (is_pk or is_fk):
             continue
-        er_columns.append(ERColumn(
-            name=c["name"],
-            type=c["type"],
-            is_primary=is_pk,
-            is_foreign=is_fk,
-        ))
+        er_columns.append(
+            ERColumn(
+                name=c["name"],
+                type=c["type"],
+                is_primary=is_pk,
+                is_foreign=is_fk,
+            )
+        )
 
     er_fks = [
         ERForeignKey(
@@ -154,75 +157,6 @@ def _collect_table_for_er(
         for fk in fks_raw
     ]
     return er_columns, er_fks
-
-
-def _query_columns(
-    connection_id: str, database: str, table: str, db_type: DatabaseType
-) -> List[Dict[str, Any]]:
-    """查询表列信息 (跨数据库简化版)"""
-    if db_type == DatabaseType.MYSQL:
-        query = """
-        SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_KEY
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
-        ORDER BY ORDINAL_POSITION
-        """
-        rows = connection_manager.execute_query(connection_id, query, (database, table))
-        return [
-            {
-                "name": r["COLUMN_NAME"],
-                "type": r["COLUMN_TYPE"],
-                "is_primary": r["COLUMN_KEY"] == "PRI",
-            }
-            for r in rows
-        ]
-    if db_type == DatabaseType.SQLITE:
-        query = f"PRAGMA table_info('{table}')"
-        rows = connection_manager.execute_query(connection_id, query)
-        return [
-            {
-                "name": r.get("name", ""),
-                "type": r.get("type", ""),
-                "is_primary": r.get("pk", 0) > 0,
-            }
-            for r in rows
-        ]
-    raise MCPServiceError(f"ER column query not implemented for {db_type}")
-
-
-def _query_foreign_keys(
-    connection_id: str, database: str, table: str, db_type: DatabaseType
-) -> List[Dict[str, Any]]:
-    """查询表外键"""
-    if db_type == DatabaseType.MYSQL:
-        query = """
-        SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-        FROM information_schema.KEY_COLUMN_USAGE
-        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
-          AND REFERENCED_TABLE_NAME IS NOT NULL
-        ORDER BY ORDINAL_POSITION
-        """
-        rows = connection_manager.execute_query(connection_id, query, (database, table))
-        return [
-            {
-                "column": r["COLUMN_NAME"],
-                "to_table": r["REFERENCED_TABLE_NAME"],
-                "to_column": r["REFERENCED_COLUMN_NAME"],
-            }
-            for r in rows
-        ]
-    if db_type == DatabaseType.SQLITE:
-        query = f"PRAGMA foreign_key_list('{table}')"
-        rows = connection_manager.execute_query(connection_id, query)
-        return [
-            {
-                "column": r.get("from", ""),
-                "to_table": r.get("table", ""),
-                "to_column": r.get("to", ""),
-            }
-            for r in rows
-        ]
-    return []
 
 
 def _query_columns(
