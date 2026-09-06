@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a focused improvement
+title: ":sparkles: feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and user value
+      description: 谁遇到了什么问题？不解决会造成什么影响？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal and non-goals
+      description: 描述建议方案、明确不包含的内容，以及可能的替代方案。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: 用可验证的条目描述完成条件。
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: architecture
+    attributes:
+      label: Architecture and compatibility
+      description: 受影响模块、API、数据格式、性能和迁移风险。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight
+      options:
+        - label: 我已搜索现有 Issue，确认没有重复提案。
+          required: true
+        - label: 我愿意协助编写测试或验证方案。
+          required: false
