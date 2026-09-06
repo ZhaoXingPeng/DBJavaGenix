@@ -453,7 +453,16 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
                     result = cursor.fetchone()
                     if result:
                         server_info = f"MySQL {result[0] if isinstance(result, tuple) else result['version']}"
-                        
+
+            elif config.type == DatabaseType.POSTGRESQL:
+                with connection_manager.get_cursor(connection_id) as cursor:
+                    cursor.execute("SELECT version() AS version")
+                    result = cursor.fetchone()
+                    if result:
+                        server_info = (
+                            f"PostgreSQL {result[0] if isinstance(result, tuple) else result['version']}"
+                        )
+
             elif config.type == DatabaseType.SQLITE:
                 server_info = "SQLite"
                 
@@ -527,6 +536,14 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
         # Query databases based on database type
         if config.type == DatabaseType.MYSQL:
             query = "SHOW DATABASES"
+
+        elif config.type == DatabaseType.POSTGRESQL:
+            query = """
+            SELECT datname AS database_name
+            FROM pg_database
+            WHERE datallowconn = TRUE AND NOT datistemplate
+            ORDER BY datname
+            """
         elif config.type == DatabaseType.SQLITE:
             # SQLite doesn't have multiple databases concept
             return [TextContent(
@@ -605,12 +622,28 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         # Query tables based on database type
         if config.type == DatabaseType.MYSQL:
             query = f"SHOW TABLES FROM `{database}`"
+            params = None
+
+        elif config.type == DatabaseType.POSTGRESQL:
+            query = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_catalog = %s
+              AND table_type = 'BASE TABLE'
+              AND table_schema NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY table_schema, table_name
+            """
+            params = (database,)
         elif config.type == DatabaseType.SQLITE:
             query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            params = None
         else:
             raise MCPServiceError(f"Listing tables not implemented for {config.type}")
         
-        results = connection_manager.execute_query(connection_id, query)
+        if params is None:
+            results = connection_manager.execute_query(connection_id, query)
+        else:
+            results = connection_manager.execute_query(connection_id, query, params)
         
         # Extract table names
         tables = []
@@ -681,9 +714,19 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         # Query table existence based on database type
         if config.type == DatabaseType.MYSQL:
             query = """
-            SELECT COUNT(*) as count 
-            FROM information_schema.TABLES 
+            SELECT COUNT(*) as count
+            FROM information_schema.TABLES
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+            """
+            results = connection_manager.execute_query(connection_id, query, (database, table))
+
+        elif config.type == DatabaseType.POSTGRESQL:
+            query = """
+            SELECT COUNT(*) AS count
+            FROM information_schema.tables
+            WHERE table_catalog = %s
+              AND table_name = %s
+              AND table_schema NOT IN ('pg_catalog', 'information_schema')
             """
             results = connection_manager.execute_query(connection_id, query, (database, table))
             
@@ -897,7 +940,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
             ORDER BY ORDINAL_POSITION
             """
             results = connection_manager.execute_query(connection_id, query, (database, table))
-            
+
         elif config.type == DatabaseType.SQLITE:
             # SQLite PRAGMA table_info
             query = f"PRAGMA table_info('{table}')"
