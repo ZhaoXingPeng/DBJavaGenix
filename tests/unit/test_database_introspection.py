@@ -107,3 +107,68 @@ def test_postgresql_introspection_uses_catalog_queries():
 
     assert len(manager.calls) == 5
     assert all("SHOW TABLES" not in query for query, _ in manager.calls)
+
+
+class SchemaAwarePostgresManager(RecordingManager):
+    def execute_query(self, connection_id, query, params=None):
+        self.calls.append((query, params))
+        if "information_schema.tables" in query:
+            return [
+                {"table_name": "users", "table_schema": params[1] if len(params) > 1 else "public"}
+            ]
+        if "information_schema.columns" in query:
+            return [
+                {
+                    "column_name": "id",
+                    "data_type": "USER-DEFINED",
+                    "is_nullable": "NO",
+                    "column_type": "uuid",
+                    "column_comment": "stable identifier",
+                },
+                {
+                    "column_name": "created_at",
+                    "data_type": "timestamp with time zone",
+                    "is_nullable": "NO",
+                    "column_type": "timestamp with time zone",
+                },
+            ]
+        if "table_constraints" in query and "PRIMARY KEY" in query:
+            return [{"column_name": "id"}]
+        if "pg_index" in query:
+            return [{"key_name": "users_pkey", "column_name": "id", "is_unique": True}]
+        return []
+
+
+def test_postgresql_describe_table_scopes_all_catalog_queries_to_schema():
+    manager = SchemaAwarePostgresManager()
+    metadata = DatabaseIntrospector(manager).describe_table("pg-1", "users", "tenant_a")
+
+    assert metadata["schema"] == "tenant_a"
+    assert metadata["comment"] == ""
+    assert metadata["primary_keys"] == ["id"]
+    assert metadata["columns"][0]["column_type"] == "uuid"
+    assert metadata["columns"][0]["comment"] == "stable identifier"
+    assert metadata["columns"][0]["primary_key"] is True
+    assert all(params == ("users", "tenant_a") for _, params in manager.calls if params)
+
+
+def test_postgresql_get_table_rejects_ambiguous_schema():
+    manager = RecordingManager()
+
+    def execute_query(connection_id, query, params=None):
+        if "information_schema.tables" in query:
+            return [
+                {"table_name": "users", "table_schema": "tenant_a"},
+                {"table_name": "users", "table_schema": "tenant_b"},
+            ]
+        return []
+
+    manager.execute_query = execute_query
+    introspector = DatabaseIntrospector(manager)
+
+    try:
+        introspector.get_table("pg-1", "users")
+    except Exception as exc:
+        assert "multiple schemas" in str(exc)
+    else:
+        raise AssertionError("ambiguous PostgreSQL table should require schema")

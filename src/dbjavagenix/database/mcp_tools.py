@@ -4,6 +4,7 @@ MCP tools for database connection and basic query operations
 import logging
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -11,8 +12,14 @@ from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
 
 from ..core.models import DatabaseConfig, DatabaseType
 from ..utils.dependency_manager import DependencyManager
-from ..core.exceptions import DatabaseConnectionError, DatabaseQueryError, MCPServiceError
+from ..core.exceptions import (
+    DatabaseAnalysisError,
+    DatabaseConnectionError,
+    DatabaseQueryError,
+    MCPServiceError,
+)
 from ..database.connection_manager import connection_manager
+from ..database.introspection import DatabaseIntrospector
 from ..config.config_manager import ConfigManager
 from ..utils.pom_analyzer import PomAnalyzer
 
@@ -312,6 +319,10 @@ def get_table_analysis_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Table name"
                     },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (defaults to the resolved table schema)"
+                    },
                     "include_java_types": {
                         "type": "boolean",
                         "description": "Include Java type mapping for columns",
@@ -339,6 +350,10 @@ def get_table_analysis_tools() -> List[Tool]:
                     "table": {
                         "type": "string",
                         "description": "Table name"
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional)"
                     }
                 },
                 "required": ["connection_id", "database", "table"]
@@ -362,6 +377,10 @@ def get_table_analysis_tools() -> List[Tool]:
                     "table": {
                         "type": "string",
                         "description": "Table name"
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional)"
                     }
                 },
                 "required": ["connection_id", "database", "table"]
@@ -385,6 +404,10 @@ def get_table_analysis_tools() -> List[Tool]:
                     "table": {
                         "type": "string",
                         "description": "Table name"
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional)"
                     }
                 },
                 "required": ["connection_id", "database", "table"]
@@ -408,6 +431,10 @@ def get_table_analysis_tools() -> List[Tool]:
                     "table": {
                         "type": "string",
                         "description": "Table name"
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional)"
                     }
                 },
                 "required": ["connection_id", "database", "table"]
@@ -705,7 +732,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         connection_id = arguments["connection_id"]
         database = arguments["database"]
         table = arguments["table"]
-        
+
         # Get connection info to determine database type  
         config = connection_manager.get_connection_info(connection_id)
         if not config:
@@ -836,7 +863,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
             text=result_text
         )]
         
-    except (DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
+    except (DatabaseAnalysisError, DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
         error_response = {
             "success": False,
             "error": "query_failed",
@@ -875,22 +902,36 @@ def _get_java_type_mapping(db_type: DatabaseType, column_type: str, precision: O
     """
     try:
         config_manager = ConfigManager()
-        type_mapping = config_manager.get_type_mapping()
+        if hasattr(config_manager, "get_type_mapping"):
+            type_mapping = config_manager.get_type_mapping()
+        else:
+            type_mapping = _load_default_type_mapping()
         
         db_key = db_type.value.lower()
-        column_type_upper = column_type.upper()
+        column_type_upper = column_type.upper().strip()
+        base_type = re.sub(r"\([^)]*\)", "", column_type_upper)
+        base_type = re.sub(r"\s+", " ", base_type).strip()
+        type_candidates = [
+            column_type_upper,
+            base_type,
+            column_type_upper.replace(" ", "_"),
+            base_type.replace(" ", "_"),
+        ]
         
         if db_key in type_mapping:
             db_mapping = type_mapping[db_key]
             
             # Search in all categories
             for category in db_mapping.values():
-                if isinstance(category, dict) and column_type_upper in category:
-                    mapping = category[column_type_upper]
-                    return {
-                        "java_type": mapping.get("java_type", "Object"),
-                        "imports": mapping.get("imports", [])
-                    }
+                if not isinstance(category, dict):
+                    continue
+                for candidate in type_candidates:
+                    if candidate in category:
+                        mapping = category[candidate]
+                        return {
+                            "java_type": mapping.get("java_type", "Object"),
+                            "imports": mapping.get("imports", []),
+                        }
         
         # Default fallback
         return {"java_type": "Object", "imports": []}
@@ -898,6 +939,25 @@ def _get_java_type_mapping(db_type: DatabaseType, column_type: str, precision: O
     except Exception as e:
         logger.warning(f"Failed to get Java type mapping: {e}")
         return {"java_type": "Object", "imports": []}
+
+
+@lru_cache(maxsize=1)
+def _load_default_type_mapping() -> Dict[str, Any]:
+    """Load the YAML mapping blocks embedded in the project reference file."""
+    try:
+        import yaml
+
+        path = Path(__file__).resolve().parents[1] / "config" / "default_type_mapping.yaml"
+        text = path.read_text(encoding="utf-8")
+        mapping: Dict[str, Any] = {}
+        for block in re.findall(r"```yaml\s*(.*?)```", text, flags=re.DOTALL):
+            loaded = yaml.safe_load(block)
+            if isinstance(loaded, dict):
+                mapping.update(loaded)
+        return mapping
+    except Exception as exc:
+        logger.warning("Failed to load default type mapping: %s", exc)
+        return {}
 
 
 async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextContent]:
@@ -914,107 +974,47 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
         connection_id = arguments["connection_id"]
         database = arguments["database"]
         table = arguments["table"]
+        schema = arguments.get("schema") or None
         include_java_types = arguments.get("include_java_types", True)
-        
-        # Get connection info to determine database type
-        config = connection_manager.get_connection_info(connection_id)
-        if not config:
-            raise DatabaseConnectionError(f"Connection {connection_id} not found")
-        
-        # Query table structure based on database type
-        if config.type == DatabaseType.MYSQL:
-            query = """
-            SELECT 
-                COLUMN_NAME,
-                DATA_TYPE,
-                IS_NULLABLE,
-                COLUMN_DEFAULT,
-                COLUMN_COMMENT,
-                COLUMN_TYPE,
-                NUMERIC_PRECISION,
-                NUMERIC_SCALE,
-                CHARACTER_MAXIMUM_LENGTH,
-                COLUMN_KEY
-            FROM information_schema.COLUMNS 
-            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
-            ORDER BY ORDINAL_POSITION
-            """
-            results = connection_manager.execute_query(connection_id, query, (database, table))
-
-        elif config.type == DatabaseType.SQLITE:
-            # SQLite PRAGMA table_info
-            query = f"PRAGMA table_info('{table}')"
-            pragma_results = connection_manager.execute_query(connection_id, query)
-            
-            # Convert PRAGMA results to standard format
-            results = []
-            for row in pragma_results:
-                results.append({
-                    "COLUMN_NAME": row.get("name", ""),
-                    "DATA_TYPE": row.get("type", ""),
-                    "IS_NULLABLE": "YES" if row.get("notnull", 0) == 0 else "NO",
-                    "COLUMN_DEFAULT": row.get("dflt_value"),
-                    "COLUMN_COMMENT": "",
-                    "COLUMN_TYPE": row.get("type", ""),
-                    "NUMERIC_PRECISION": None,
-                    "NUMERIC_SCALE": None, 
-                    "CHARACTER_MAXIMUM_LENGTH": None,
-                    "COLUMN_KEY": "PRI" if row.get("pk", 0) == 1 else ""
-                })
-        else:
-            raise MCPServiceError(f"Table description not implemented for {config.type}")
-        
-        if not results:
-            raise DatabaseQueryError(f"Table '{table}' not found in database '{database}'")
-        
-        # Process column information
+        introspector = DatabaseIntrospector(connection_manager)
+        config = introspector.get_config(connection_id)
+        metadata = introspector.describe_table(connection_id, table, schema)
         columns = []
         java_imports = set()
-        
-        for row in results:
+
+        for row in metadata["columns"]:
             column_info = {
-                "name": row["COLUMN_NAME"],
-                "data_type": row["DATA_TYPE"],
-                "column_type": row["COLUMN_TYPE"],
-                "nullable": row["IS_NULLABLE"] == "YES",
-                "default_value": row["COLUMN_DEFAULT"],
-                "comment": row.get("COLUMN_COMMENT", ""),
-                "is_primary_key": row["COLUMN_KEY"] == "PRI",
-                "precision": row.get("NUMERIC_PRECISION"),
-                "scale": row.get("NUMERIC_SCALE"),
-                "max_length": row.get("CHARACTER_MAXIMUM_LENGTH")
+                "name": row["name"],
+                "data_type": row["type"],
+                "column_type": row["column_type"],
+                "nullable": row["nullable"],
+                "default_value": row["default_value"],
+                "comment": row["comment"],
+                "is_primary_key": row["primary_key"],
+                "precision": row["precision"],
+                "scale": row["scale"],
+                "max_length": row["max_length"],
             }
-            
+
             # Add Java type mapping if requested
             if include_java_types:
                 java_mapping = _get_java_type_mapping(
-                    config.type, 
-                    row["DATA_TYPE"],
-                    row.get("NUMERIC_PRECISION"),
-                    row.get("NUMERIC_SCALE")
+                    config.type,
+                    row["column_type"] or row["type"],
+                    row["precision"],
+                    row["scale"],
                 )
                 column_info["java_type"] = java_mapping["java_type"]
                 java_imports.update(java_mapping["imports"])
-            
+
             columns.append(column_info)
-        
-        # Get additional table information
-        table_comment = ""
-        if config.type == DatabaseType.MYSQL:
-            comment_query = """
-            SELECT TABLE_COMMENT 
-            FROM information_schema.TABLES 
-            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
-            """
-            comment_results = connection_manager.execute_query(connection_id, comment_query, (database, table))
-            if comment_results:
-                table_comment = comment_results[0].get("TABLE_COMMENT", "")
-        
+
         response = {
             "success": True,
             "database": database,
             "table": table,
-            "comment": table_comment,
+            "schema": metadata["schema"],
+            "comment": metadata["comment"],
             "columns": columns,
             "column_count": len(columns),
             "java_imports": sorted(list(java_imports)) if include_java_types else []
@@ -1022,8 +1022,8 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
         
         # Format display text
         result_text = f"Table Structure: {database}.{table}\n"
-        if table_comment:
-            result_text += f"Comment: {table_comment}\n"
+        if metadata["comment"]:
+            result_text += f"Comment: {metadata['comment']}\n"
         result_text += f"\nColumns ({len(columns)}):\n\n"
         
         for i, col in enumerate(columns, 1):
@@ -1052,7 +1052,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
             text=result_text
         )]
         
-    except (DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
+    except (DatabaseAnalysisError, DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
         error_response = {
             "success": False,
             "error": "analysis_failed",
@@ -1090,7 +1090,8 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
         connection_id = arguments["connection_id"]
         database = arguments["database"]
         table = arguments["table"]
-        
+        schema = arguments.get("schema") or None
+
         # Get connection info to determine database type
         config = connection_manager.get_connection_info(connection_id)
         if not config:
@@ -1115,6 +1116,26 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
             ORDER BY ORDINAL_POSITION
             """
             results = connection_manager.execute_query(connection_id, query, (database, table))
+
+        elif config.type == DatabaseType.POSTGRESQL:
+            columns = DatabaseIntrospector(connection_manager).get_columns(
+                connection_id, table, schema
+            )
+            results = [
+                {
+                    "COLUMN_NAME": column["name"],
+                    "DATA_TYPE": column["type"],
+                    "COLUMN_TYPE": column["column_type"],
+                    "IS_NULLABLE": "YES" if column["nullable"] else "NO",
+                    "COLUMN_DEFAULT": column["default_value"],
+                    "COLUMN_COMMENT": column["comment"],
+                    "NUMERIC_PRECISION": column["precision"],
+                    "NUMERIC_SCALE": column["scale"],
+                    "CHARACTER_MAXIMUM_LENGTH": column["max_length"],
+                    "ORDINAL_POSITION": position,
+                }
+                for position, column in enumerate(columns, 1)
+            ]
             
         elif config.type == DatabaseType.SQLITE:
             query = f"PRAGMA table_info('{table}')"
@@ -1167,7 +1188,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
             text=result_text
         )]
         
-    except (DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
+    except (DatabaseAnalysisError, DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
         error_response = {
             "success": False,
             "error": "query_failed",
@@ -1205,7 +1226,8 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         connection_id = arguments["connection_id"]
         database = arguments["database"]
         table = arguments["table"]
-        
+        schema = arguments.get("schema") or None
+
         # Get connection info to determine database type
         config = connection_manager.get_connection_info(connection_id)
         if not config:
@@ -1224,6 +1246,15 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
             ORDER BY ORDINAL_POSITION
             """
             results = connection_manager.execute_query(connection_id, query, (database, table))
+
+        elif config.type == DatabaseType.POSTGRESQL:
+            primary_keys = DatabaseIntrospector(connection_manager).get_primary_keys(
+                connection_id, table, schema
+            )
+            results = [
+                {"COLUMN_NAME": column_name, "ORDINAL_POSITION": position}
+                for position, column_name in enumerate(primary_keys, 1)
+            ]
             
         elif config.type == DatabaseType.SQLITE:
             query = f"PRAGMA table_info('{table}')"
@@ -1264,7 +1295,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
             text=result_text
         )]
         
-    except (DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
+    except (DatabaseAnalysisError, DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
         error_response = {
             "success": False,
             "error": "query_failed",
@@ -1302,7 +1333,8 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         connection_id = arguments["connection_id"]
         database = arguments["database"]
         table = arguments["table"]
-        
+        schema = arguments.get("schema") or None
+
         # Get connection info to determine database type
         config = connection_manager.get_connection_info(connection_id)
         if not config:
@@ -1329,6 +1361,23 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
             ORDER BY kcu.ORDINAL_POSITION
             """
             results = connection_manager.execute_query(connection_id, query, (database, table))
+
+        elif config.type == DatabaseType.POSTGRESQL:
+            foreign_keys = DatabaseIntrospector(connection_manager).get_foreign_keys(
+                connection_id, table, schema
+            )
+            results = [
+                {
+                    "COLUMN_NAME": foreign_key["column_name"],
+                    "REFERENCED_TABLE_SCHEMA": schema or "",
+                    "REFERENCED_TABLE_NAME": foreign_key["referenced_table"],
+                    "REFERENCED_COLUMN_NAME": foreign_key["referenced_column"],
+                    "CONSTRAINT_NAME": foreign_key["constraint_name"],
+                    "UPDATE_RULE": "",
+                    "DELETE_RULE": "",
+                }
+                for foreign_key in foreign_keys
+            ]
             
         elif config.type == DatabaseType.SQLITE:
             query = f"PRAGMA foreign_key_list('{table}')"
@@ -1388,7 +1437,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
             text=result_text
         )]
         
-    except (DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
+    except (DatabaseAnalysisError, DatabaseConnectionError, DatabaseQueryError, MCPServiceError) as e:
         error_response = {
             "success": False,
             "error": "query_failed",
@@ -1426,7 +1475,8 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         connection_id = arguments["connection_id"]
         database = arguments["database"]
         table = arguments["table"]
-        
+        schema = arguments.get("schema") or None
+
         # Get connection info to determine database type
         config = connection_manager.get_connection_info(connection_id)
         if not config:
@@ -1449,7 +1499,24 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
             ORDER BY INDEX_NAME, SEQ_IN_INDEX
             """
             results = connection_manager.execute_query(connection_id, query, (database, table))
-            
+
+        elif config.type == DatabaseType.POSTGRESQL:
+            indexes = DatabaseIntrospector(connection_manager).get_indexes(
+                connection_id, table, schema
+            )
+            results = [
+                {
+                    "INDEX_NAME": index["key_name"],
+                    "COLUMN_NAME": index["column_name"],
+                    "SEQ_IN_INDEX": index["seq_in_index"],
+                    "NON_UNIQUE": 0 if index["unique"] else 1,
+                    "INDEX_TYPE": index["index_type"],
+                    "NULLABLE": "",
+                    "INDEX_COMMENT": "",
+                }
+                for index in indexes
+            ]
+
         elif config.type == DatabaseType.SQLITE:
             # Get index list
             index_query = f"PRAGMA index_list('{table}')"
