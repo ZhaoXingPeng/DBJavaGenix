@@ -2,7 +2,7 @@
 
 import pytest
 
-from dbjavagenix.database.codegen_tools import CodegenAnalyzer
+from dbjavagenix.database.codegen_tools import CodegenAnalyzer, CodegenGenerator
 
 
 class _FakeIntrospector:
@@ -53,3 +53,9 @@ def test_analyzer_has_no_legacy_direct_metadata_methods():
         "_get_indexes",
     ):
         assert not hasattr(analyzer, method_name)
+
+
+@pytest.mark.asyncio
+async def test_generator_rejects_unknown_category_before_reading_analysis():
+    with pytest.raises(ValueError, match="不支持的模板分类"):
+        await CodegenGenerator().generate_code({}, template_category="UnknownCategory")

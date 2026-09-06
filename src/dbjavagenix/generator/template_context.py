@@ -378,46 +378,51 @@ class TemplateContextBuilder:
 
 class TemplateConfigManager:
     """模板配置管理器"""
-    
-    @staticmethod
-    def get_template_files(category: str) -> List[str]:
+
+    _TEMPLATE_FILES: Dict[str, List[str]] = {
+        "Default": [
+            "entity.mustache",
+            "dao.mustache",
+            "service.mustache",
+            "serviceImpl.mustache",
+            "controller.mustache",
+            "mapper.xml.mustache",
+        ],
+        "MybatisPlus": [
+            "entity.mustache",
+            "dao.mustache",
+            "service.mustache",
+            "serviceImpl.mustache",
+            "controller.mustache",
+        ],
+        "MybatisPlus-Mixed": [
+            "entity.mustache",
+            "dao.mustache",
+            "service.mustache",
+            "serviceImpl.mustache",
+            "controller.mustache",
+            "mapper.mustache",
+        ],
+        "sb35-java21": [
+            "entity.mustache",
+            "dao.mustache",
+            "service.mustache",
+            "serviceImpl.mustache",
+            "controller.mustache",
+            "dto.mustache",
+        ],
+    }
+
+    @classmethod
+    def get_supported_categories(cls) -> List[str]:
+        """Return the canonical template categories exposed by the generator."""
+        return list(cls._TEMPLATE_FILES)
+
+    @classmethod
+    def get_template_files(cls, category: str) -> List[str]:
         """获取指定分类的模板文件列表"""
-        template_files = {
-            "Default": [
-                "entity.mustache",
-                "dao.mustache", 
-                "service.mustache",
-                "serviceImpl.mustache",
-                "controller.mustache",
-                "mapper.xml.mustache"  # 使用 mapper.xml.mustache
-            ],
-            "MybatisPlus": [
-                "entity.mustache",
-                "dao.mustache",
-                "service.mustache", 
-                "serviceImpl.mustache",
-                "controller.mustache"
-            ],
-            "MybatisPlus-Mixed": [
-                "entity.mustache",
-                "dao.mustache",
-                "service.mustache",
-                "serviceImpl.mustache",
-                "controller.mustache",
-                "mapper.mustache"
-            ],
-            "sb35-java21": [
-                "entity.mustache",
-                "dao.mustache",
-                "service.mustache",
-                "serviceImpl.mustache",
-                "controller.mustache",
-                "dto.mustache"
-            ]
-        }
-        
-        return template_files.get(category, [])
-    
+        return list(cls._TEMPLATE_FILES.get(category, []))
+
     @staticmethod
     def get_additional_templates() -> List[str]:
         """获取通用附加模板列表"""

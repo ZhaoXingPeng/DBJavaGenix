@@ -174,6 +174,15 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
         include_mapstruct = arguments.get("include_mapstruct", True)
         project_path = arguments.get("project_path")
 
+        from ..generator.template_context import TemplateConfigManager
+
+        supported_categories = TemplateConfigManager.get_supported_categories()
+        if template_category not in supported_categories:
+            supported = ", ".join(supported_categories)
+            raise MCPServiceError(
+                f"不支持的模板分类: {template_category!r}；支持分类: {supported}"
+            )
+
         config = connection_manager.get_connection_info(connection_id)
         if not config:
             raise DatabaseConnectionError(f"Connection {connection_id} not found")
@@ -331,8 +340,24 @@ async def _render_single_layer(
 
     category = context.get("templateCategory") or "MybatisPlus-Mixed"
 
-    from ..generator.mustache_engine import MustacheTemplateEngine
     from ..generator.template_context import TemplateConfigManager
+
+    supported_categories = TemplateConfigManager.get_supported_categories()
+    if category not in supported_categories:
+        return [TextContent(
+            type="text",
+            text=json.dumps(
+                {
+                    "error": "unsupported template category",
+                    "template_category": category,
+                    "supported_categories": supported_categories,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )]
+
+    from ..generator.mustache_engine import MustacheTemplateEngine
     from pathlib import Path
 
     template_base = Path(__file__).parent.parent / "templates" / "java"

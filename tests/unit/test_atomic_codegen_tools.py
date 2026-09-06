@@ -27,6 +27,7 @@ from dbjavagenix.database.atomic_codegen_tools import (
     handle_codegen_render_entity,
     handle_codegen_render_mapper,
     handle_codegen_render_service,
+    handle_codegen_build_context,
 )
 from dbjavagenix.core.models import ColumnInfo, TableInfo
 from dbjavagenix.generator.template_context import TemplateContextBuilder
@@ -233,6 +234,32 @@ class TestRenderMapper:
 # ============================================================
 
 class TestErrorHandling:
+    def test_build_context_rejects_unknown_category_before_connection_lookup(self):
+        result = asyncio.run(
+            handle_codegen_build_context(
+                {
+                    "connection_id": "not-used",
+                    "table_name": "users",
+                    "template_category": "UnknownCategory",
+                }
+            )
+        )
+        payload = json.loads(result[0].text)
+
+        assert payload["stage"] == "build_context"
+        assert "不支持的模板分类" in payload["error"]
+
+    def test_render_rejects_unknown_category(self):
+        result = asyncio.run(
+            handle_codegen_render_entity(
+                {"context": {"templateCategory": "UnknownCategory"}}
+            )
+        )
+        payload = json.loads(result[0].text)
+
+        assert payload["error"] == "unsupported template category"
+        assert payload["supported_categories"][-1] == "sb35-java21"
+
     def test_render_without_context_returns_error(self):
         result = asyncio.run(handle_codegen_render_entity({}))
         payload = json.loads(result[0].text)
