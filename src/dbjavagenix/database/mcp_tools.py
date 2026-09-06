@@ -162,6 +162,15 @@ def _has_top_level_limit_clause(query: str) -> bool:
     return False
 
 
+def _quote_mysql_identifier(identifier: Any) -> str:
+    """Quote one MySQL identifier and reject control characters."""
+    if not isinstance(identifier, str) or not identifier:
+        raise MCPServiceError("MySQL identifier must be a non-empty string")
+    if any(ord(char) < 32 or ord(char) == 127 for char in identifier):
+        raise MCPServiceError("MySQL identifier must not contain control characters")
+    return f"`{identifier.replace('`', '``')}`"
+
+
 def get_connection_tools() -> List[Tool]:
     """
     Get list of database connection and basic query MCP tools
@@ -658,7 +667,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         # Query tables based on database type
         schema_filter = "AND table_schema = %s" if schema else ""
         if config.type == DatabaseType.MYSQL:
-            query = f"SHOW TABLES FROM `{database}`"
+            query = f"SHOW TABLES FROM {_quote_mysql_identifier(database)}"
             params = None
 
         elif config.type == DatabaseType.POSTGRESQL:
