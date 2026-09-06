@@ -568,7 +568,7 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Database connection failed: {safe_error}\n\nRaw Response: {error_response}"
+            text=f"Database connection failed: {safe_error}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -581,7 +581,7 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {safe_error}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {safe_error}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -659,7 +659,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Failed to list databases: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to list databases: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -671,7 +671,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -763,7 +763,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Failed to list tables: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to list tables: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -775,7 +775,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -852,7 +852,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Failed to check table existence: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to check table existence: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -864,7 +864,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -932,7 +932,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Failed to execute query: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to execute query: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -944,7 +944,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text", 
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1121,7 +1121,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
         }
         return [TextContent(
             type="text",
-            text=f"Failed to describe table: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to describe table: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1133,7 +1133,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1257,7 +1257,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get column information: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to get column information: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1269,7 +1269,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1359,7 +1359,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get primary keys: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to get primary keys: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1371,7 +1371,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1501,7 +1501,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get foreign keys: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to get foreign keys: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1513,7 +1513,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1657,7 +1657,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get table indexes: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to get table indexes: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1669,7 +1669,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1921,7 +1921,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Failed to analyze table for code generation: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to analyze table for code generation: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1933,7 +1933,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -2361,7 +2361,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         }
         return [TextContent(
             type="text",
-            text=f"Failed to generate code: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Failed to generate code: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -2373,7 +2373,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -2757,7 +2757,7 @@ async def handle_springboot_validate_project(arguments: Dict[str, Any]) -> List[
         }
         return [TextContent(
             type="text",
-            text=f"Project validation failed: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Project validation failed: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -2897,7 +2897,7 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         }
         return [TextContent(
             type="text",
-            text=f"Dependency analysis failed: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Dependency analysis failed: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
         )]
 
 
