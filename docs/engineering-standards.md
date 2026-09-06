@@ -18,6 +18,10 @@
 
 提交和 PR 使用完全相同的标题格式：先写 Gitmoji，再写 [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) 类型和范围。
 
+### 中文优先
+
+Issue 和 PR 的标题、正文描述默认优先使用中文，确保背景、验收标准、实验结果和风险对中文协作者清晰可读。Gitmoji、Conventional Commits 类型、代码标识、命令、API 名称、错误信息和数据库专有名词保留原文；涉及跨团队协作时可以补充英文摘要。
+
 ```text
 <gitmoji> <type>(<scope>): <简短动作>
 

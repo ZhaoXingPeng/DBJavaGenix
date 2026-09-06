@@ -3,8 +3,10 @@
 标题必须使用与 commit 相同的 Gitmoji + Conventional Commits 格式：
 
 ```text
-:sparkles: feat(scope): 简短动作
+:sparkles: feat(scope): 用中文填写简短动作
 ```
+
+标题和正文描述尽量使用中文；Gitmoji、commit 类型、代码标识、命令、API 名称和错误信息保留原文。
 
 ## 关联 Issue
 
