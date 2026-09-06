@@ -1138,24 +1138,24 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
             ]
             
         elif config.type == DatabaseType.SQLITE:
-            query = f"PRAGMA table_info('{table}')"
-            pragma_results = connection_manager.execute_query(connection_id, query)
-            
-            # Convert to standard format
-            results = []
-            for i, row in enumerate(pragma_results, 1):
-                results.append({
-                    "COLUMN_NAME": row.get("name", ""),
-                    "DATA_TYPE": row.get("type", ""),
-                    "COLUMN_TYPE": row.get("type", ""),
-                    "IS_NULLABLE": "YES" if row.get("notnull", 0) == 0 else "NO",
-                    "COLUMN_DEFAULT": row.get("dflt_value"),
-                    "COLUMN_COMMENT": "",
-                    "NUMERIC_PRECISION": None,
-                    "NUMERIC_SCALE": None,
-                    "CHARACTER_MAXIMUM_LENGTH": None,
-                    "ORDINAL_POSITION": i
-                })
+            columns = DatabaseIntrospector(connection_manager).get_columns(
+                connection_id, table, schema
+            )
+            results = [
+                {
+                    "COLUMN_NAME": column["name"],
+                    "DATA_TYPE": column["type"],
+                    "COLUMN_TYPE": column["column_type"],
+                    "IS_NULLABLE": "YES" if column["nullable"] else "NO",
+                    "COLUMN_DEFAULT": column["default_value"],
+                    "COLUMN_COMMENT": column["comment"],
+                    "NUMERIC_PRECISION": column["precision"],
+                    "NUMERIC_SCALE": column["scale"],
+                    "CHARACTER_MAXIMUM_LENGTH": column["max_length"],
+                    "ORDINAL_POSITION": position,
+                }
+                for position, column in enumerate(columns, 1)
+            ]
         else:
             raise MCPServiceError(f"Column analysis not implemented for {config.type}")
         
@@ -1257,18 +1257,13 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
             ]
             
         elif config.type == DatabaseType.SQLITE:
-            query = f"PRAGMA table_info('{table}')"
-            pragma_results = connection_manager.execute_query(connection_id, query)
-            
-            # Filter primary keys
-            results = []
-            for row in pragma_results:
-                if row.get("pk", 0) > 0:
-                    results.append({
-                        "COLUMN_NAME": row.get("name", ""),
-                        "ORDINAL_POSITION": row.get("pk", 0)
-                    })
-            results.sort(key=lambda x: x["ORDINAL_POSITION"])
+            primary_keys = DatabaseIntrospector(connection_manager).get_primary_keys(
+                connection_id, table, schema
+            )
+            results = [
+                {"COLUMN_NAME": column_name, "ORDINAL_POSITION": position}
+                for position, column_name in enumerate(primary_keys, 1)
+            ]
         else:
             raise MCPServiceError(f"Primary key analysis not implemented for {config.type}")
         
@@ -1380,21 +1375,21 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
             ]
             
         elif config.type == DatabaseType.SQLITE:
-            query = f"PRAGMA foreign_key_list('{table}')"
-            pragma_results = connection_manager.execute_query(connection_id, query)
-            
-            # Convert to standard format
-            results = []
-            for row in pragma_results:
-                results.append({
-                    "COLUMN_NAME": row.get("from", ""),
-                    "REFERENCED_TABLE_SCHEMA": database,  # SQLite doesn't have schemas
-                    "REFERENCED_TABLE_NAME": row.get("table", ""),
-                    "REFERENCED_COLUMN_NAME": row.get("to", ""),
-                    "CONSTRAINT_NAME": f"fk_{row.get('id', 0)}",
-                    "UPDATE_RULE": row.get("on_update", "NO ACTION"),
-                    "DELETE_RULE": row.get("on_delete", "NO ACTION")
-                })
+            foreign_keys = DatabaseIntrospector(connection_manager).get_foreign_keys(
+                connection_id, table, schema
+            )
+            results = [
+                {
+                    "COLUMN_NAME": foreign_key["column_name"],
+                    "REFERENCED_TABLE_SCHEMA": database,
+                    "REFERENCED_TABLE_NAME": foreign_key["referenced_table"],
+                    "REFERENCED_COLUMN_NAME": foreign_key["referenced_column"],
+                    "CONSTRAINT_NAME": foreign_key["constraint_name"],
+                    "UPDATE_RULE": "",
+                    "DELETE_RULE": "",
+                }
+                for foreign_key in foreign_keys
+            ]
         else:
             raise MCPServiceError(f"Foreign key analysis not implemented for {config.type}")
         
@@ -1518,30 +1513,21 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
             ]
 
         elif config.type == DatabaseType.SQLITE:
-            # Get index list
-            index_query = f"PRAGMA index_list('{table}')"
-            index_list = connection_manager.execute_query(connection_id, index_query)
-            
-            # Get detailed info for each index
-            results = []
-            for idx in index_list:
-                index_name = idx.get("name", "")
-                is_unique = idx.get("unique", 0) == 1
-                
-                # Get index info
-                info_query = f"PRAGMA index_info('{index_name}')"
-                index_info = connection_manager.execute_query(connection_id, info_query)
-                
-                for info in index_info:
-                    results.append({
-                        "INDEX_NAME": index_name,
-                        "COLUMN_NAME": info.get("name", ""),
-                        "SEQ_IN_INDEX": info.get("seqno", 0) + 1,  # Convert 0-based to 1-based
-                        "NON_UNIQUE": 0 if is_unique else 1,
-                        "INDEX_TYPE": "BTREE",  # SQLite default
-                        "NULLABLE": "",
-                        "INDEX_COMMENT": ""
-                    })
+            indexes = DatabaseIntrospector(connection_manager).get_indexes(
+                connection_id, table, schema
+            )
+            results = [
+                {
+                    "INDEX_NAME": index["key_name"],
+                    "COLUMN_NAME": index["column_name"],
+                    "SEQ_IN_INDEX": index["seq_in_index"],
+                    "NON_UNIQUE": 0 if index["unique"] else 1,
+                    "INDEX_TYPE": index["index_type"],
+                    "NULLABLE": "",
+                    "INDEX_COMMENT": "",
+                }
+                for index in indexes
+            ]
         else:
             raise MCPServiceError(f"Index analysis not implemented for {config.type}")
         

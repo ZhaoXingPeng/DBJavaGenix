@@ -31,7 +31,7 @@ def _sqlite_manager() -> tuple[ConnectionManager, str]:
     )
     manager.execute_query(
         connection_id,
-        "CREATE UNIQUE INDEX orders_user_idx ON orders(user_id)",
+        "CREATE UNIQUE INDEX orders_user_idx ON orders(user_id, created_at)",
     )
     return manager, connection_id
 
@@ -63,6 +63,36 @@ def test_sqlite_introspection_returns_normalized_metadata():
         indexes = introspector.get_indexes(connection_id, "orders")
         user_index = next(index for index in indexes if index["key_name"] == "orders_user_idx")
         assert user_index["unique"] is True
+        assert user_index["column_name"] == "user_id"
+        assert user_index["seq_in_index"] == 1
+        created_index = next(
+            index
+            for index in indexes
+            if index["key_name"] == "orders_user_idx" and index["column_name"] == "created_at"
+        )
+        assert created_index["seq_in_index"] == 2
+    finally:
+        manager.close_connection(connection_id)
+
+
+def test_sqlite_introspection_escapes_special_table_names():
+    manager = ConnectionManager()
+    connection_id = manager.create_connection(
+        DatabaseConfig(
+            type=DatabaseType.SQLITE,
+            host="",
+            port=0,
+            database=":memory:",
+            username="",
+            password="",
+        )
+    )
+    try:
+        manager.execute_query(connection_id, 'CREATE TABLE "odd\'table" (id INTEGER)')
+        introspector = DatabaseIntrospector(manager)
+        columns = introspector.get_columns(connection_id, "odd'table")
+        assert [column["name"] for column in columns] == ["id"]
+        assert introspector.get_indexes(connection_id, "odd'table") == []
     finally:
         manager.close_connection(connection_id)
 

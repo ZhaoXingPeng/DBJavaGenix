@@ -399,20 +399,41 @@ class DatabaseIntrospector:
                 for row in rows
             ]
         if config.type == DatabaseType.SQLITE:
-            rows = self.connection_manager.execute_query(
+            index_rows = self.connection_manager.execute_query(
                 connection_id,
                 f"PRAGMA index_list('{self._sqlite_identifier(table_name)}')",
             )
-            return [
-                {
-                    "key_name": self._value(row, "name", default=""),
-                    "column_name": "",
-                    "unique": bool(self._value(row, "unique", default=0)),
-                    "seq_in_index": self._value(row, "seq", default=0),
-                    "index_type": "btree",
-                }
-                for row in rows
-            ]
+            indexes: List[Dict[str, Any]] = []
+            for index_row in index_rows:
+                index_name = str(self._value(index_row, "name", default=""))
+                unique = bool(self._value(index_row, "unique", default=0))
+                index_info = self.connection_manager.execute_query(
+                    connection_id,
+                    f"PRAGMA index_info('{self._sqlite_identifier(index_name)}')",
+                )
+                if index_info:
+                    indexes.extend(
+                        {
+                            "key_name": index_name,
+                            "column_name": self._value(info, "name", default=""),
+                            "unique": unique,
+                            "seq_in_index": self._value(info, "seqno", default=0) + 1,
+                            "index_type": "btree",
+                        }
+                        for info in index_info
+                    )
+                else:
+                    # Expression indexes have no column name in PRAGMA index_info.
+                    indexes.append(
+                        {
+                            "key_name": index_name,
+                            "column_name": "",
+                            "unique": unique,
+                            "seq_in_index": 1,
+                            "index_type": "btree",
+                        }
+                    )
+            return indexes
         raise DatabaseAnalysisError(f"Index metadata not implemented for {config.type}")
 
     def describe_table(
