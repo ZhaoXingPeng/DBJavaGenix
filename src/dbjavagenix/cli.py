@@ -16,6 +16,7 @@ from .config.config_manager import ConfigManager
 from .core.exceptions import DBJavaGenixError
 from .core.models import DatabaseConfig, DatabaseType
 from .database.connection_manager import connection_manager
+from .database.capabilities import supported_database_display_names
 from .cli_helpers import (
     handle_db_connect_test,
     handle_db_query_databases,
@@ -71,7 +72,7 @@ def version():
     console.print("  - MCP server for LLM integration")
     console.print("  - Spring Boot project validation and config reading")
     console.print(
-        "\n[cyan]Supported Databases:[/cyan] MySQL, PostgreSQL, SQLite, Oracle, SQL Server"
+        f"\n[cyan]Supported Databases:[/cyan] {', '.join(supported_database_display_names())}"
     )
     console.print("[cyan]Supported Build Tools:[/cyan] Maven, Gradle")
 
