@@ -178,7 +178,7 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 | [docs/screenshots/README.md](docs/screenshots/README.md) | MCP Apps 4 组件客户端兼容性 |
 | [docs/algorithms-overview.md](docs/algorithms-overview.md) | v0.2.1 schema 图算法 (topo / cluster / cycle) |
 | [docs/design-patterns-catalog.md](docs/design-patterns-catalog.md) | 生成器与生成代码中的设计模式 |
-| [docs/adr/](docs/adr/) | 10 个 ADR (架构 / 原子 / 渐进 / 规则 / 不引依赖 / schema 算法 / 规范配置 / MCP v3 / 1h 缓存 / agentic) |
+| [docs/adr/](docs/adr/) | 14 个 ADR (架构 / 原子 / 渐进 / 规则 / 不引依赖 / schema 算法 / 规范配置 / MCP v3 / 1h 缓存 / agentic / 多方言 / SDK 契约 / 工具契约 / 元数据契约) |
 | [.claude/skills/java-codegen-from-db/SKILL.md](.claude/skills/java-codegen-from-db/SKILL.md) | 主 Skill: 代码生成 5 阶段工作流 |
 | [.claude/skills/springboot-migration/SKILL.md](.claude/skills/springboot-migration/SKILL.md) | 第二 Skill: Spring Boot 2.7→3.x 迁移 |
 
