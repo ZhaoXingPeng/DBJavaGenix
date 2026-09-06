@@ -235,8 +235,10 @@ class PostgreSQLDialect(DialectAdapter):
             # 日期
             "DATE": "LocalDate",
             "TIME": "LocalTime",
+            "TIME WITHOUT TIME ZONE": "LocalTime",
             "TIMETZ": "OffsetTime",
             "TIMESTAMP": "LocalDateTime",
+            "TIMESTAMP WITHOUT TIME ZONE": "LocalDateTime",
             "TIMESTAMPTZ": "OffsetDateTime",  # 跨时区必须 OffsetDateTime
             "TIMESTAMP WITH TIME ZONE": "OffsetDateTime",
             # 布尔
@@ -284,8 +286,10 @@ class PostgreSQLDialect(DialectAdapter):
             "TEXT": "LONGVARCHAR",
             "DATE": "DATE",
             "TIME": "TIME",
+            "TIME WITHOUT TIME ZONE": "TIME",
             "TIMETZ": "TIME_WITH_TIMEZONE",
             "TIMESTAMP": "TIMESTAMP",
+            "TIMESTAMP WITHOUT TIME ZONE": "TIMESTAMP",
             "TIMESTAMPTZ": "TIMESTAMP_WITH_TIMEZONE",
             "TIMESTAMP WITH TIME ZONE": "TIMESTAMP_WITH_TIMEZONE",
             "BOOL": "BOOLEAN",

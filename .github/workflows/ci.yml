@@ -15,108 +15,173 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-test:
-    name: Lint & Test (Python ${{ matrix.python-version }})
+  metadata:
+    name: Commit and PR policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Gitmoji titles
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            python scripts/validate_commit_title.py \
+              --title "$PR_TITLE" \
+              --range "$PR_BASE_SHA..$PR_HEAD_SHA"
+          else
+            python scripts/validate_commit_title.py \
+              --title "$(git log -1 --format=%s "$COMMIT_SHA")"
+          fi
+
+  quality:
+    name: Python quality (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
-
+        python-version: ["3.11", "3.12", "3.13"]
+    env:
+      PYTHONPATH: src
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Create venv & install (dev extras)
+      - name: Install development dependencies
         run: |
           uv venv --python ${{ matrix.python-version }}
           uv pip install -e ".[dev]"
 
       - name: Ruff lint
-        run: uv run ruff check src/ tests/
+        run: uv run ruff check src/ tests/ scripts/
 
-      - name: Ruff format check
-        run: uv run ruff format --check src/ tests/
-        continue-on-error: true  # 渐进引入,允许暂未格式化的文件
-
-      - name: Pytest (unit only) + coverage
-        env:
-          PYTHONPATH: src
+      - name: Unit tests and coverage
         run: |
           uv run pytest tests/unit/ \
             --cov=src/dbjavagenix \
             --cov-report=xml:coverage.xml \
             --cov-report=term \
-            --cov-fail-under=30
+            --cov-fail-under=35
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v4
+        uses: actions/upload-artifact@v4
         with:
-          files: coverage.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: error
 
-  template-render-check:
-    name: Render sb35-java21 templates (pystache smoke)
+  format:
+    name: Changed-file format gate
     runs-on: ubuntu-latest
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python and Ruff
+        run: |
+          uv python install 3.12
+          uv venv --python 3.12
+          uv pip install "ruff>=0.8"
+
+      - name: Check changed Python files
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          else
+            base="${COMMIT_SHA}^"
+            head="$COMMIT_SHA"
+          fi
+          mapfile -t files < <(git diff --name-only "$base" "$head" -- \
+            'src/**/*.py' 'tests/**/*.py' 'scripts/**/*.py')
+          if (( ${#files[@]} == 0 )); then
+            echo "No Python files changed"
+          else
+            printf 'Formatting %s\n' "${files[@]}"
+            uv run ruff format --check "${files[@]}"
+          fi
+
+  integration:
+    name: Database integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: src
+      TESTCONTAINERS_RYUK_DISABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      - name: Install Python deps
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install integration dependencies
         run: |
           uv venv --python 3.12
-          uv pip install -e ".[dev]"
+          uv pip install -e ".[dev,integration]"
 
-      - name: Render all sb35-java21 templates with sample context
-        env:
-          PYTHONPATH: src
+      - name: Run Testcontainers integration suite
+        run: uv run pytest tests/integration/ --no-cov -q
+
+  templates:
+    name: Template rendering contract
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install runtime dependencies
         run: |
-          uv run python -c "
-          import sys
-          sys.path.insert(0, 'src')
-          from pathlib import Path
-          import pystache
-          tpl = Path('src/dbjavagenix/templates/java/sb35-java21')
-          ctx = {
-              'entityPackage':'verify.entity','dtoPackage':'verify.dto',
-              'daoPackage':'verify.dao','servicePackage':'verify.service',
-              'serviceImplPackage':'verify.service.impl','controllerPackage':'verify.controller',
-              'className':'SysUser','tableName':'sys_user','entityNameLowerCase':'sysUser',
-              'comment':'system user','author':'ci','date':'2026-05-23',
-              'primaryKeyName':'id','primaryKeyType':'Long','capitalizedPrimaryKeyName':'Id',
-              'serialVersionUID':'1','hasJakarta':True,'hasJavax':False,
-              'hasSpringDoc':True,'useSwagger':True,'useLombok':True,
-              'generateDto':True,'generateVo':False,'imports':[],
-              'columns':[
-                  {'name':'id','javaName':'id','capitalizedJavaName':'Id','javaType':'Long','comment':'pk','isPrimaryKey':True,'nullable':False,'isString':False,'maxLength':None,'last':False},
-                  {'name':'username','javaName':'username','capitalizedJavaName':'Username','javaType':'String','comment':'name','isPrimaryKey':False,'nullable':False,'isString':True,'maxLength':64,'last':True},
-              ],
-          }
-          r = pystache.Renderer()
-          for f in sorted(tpl.glob('*.mustache')):
-              out = r.render(f.read_text(encoding='utf-8'), ctx)
-              assert out, f'empty render for {f.name}'
-              print(f'OK {f.name} ({len(out)} chars)')
-          print('All sb35-java21 templates render successfully')
-          "
+          uv venv --python 3.12
+          uv pip install -e "."
 
-  docker-build:
-    name: Docker image build
+      - name: Render every Java template
+        run: uv run python scripts/verify_templates.py
+
+  docker:
+    name: Docker image smoke test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -125,25 +190,33 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image (no push)
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
           load: true
+          push: false
           tags: dbjavagenix:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke test entrypoint
-        # MCP server 走 stdio, 这里只验证容器能启动到 import 阶段。
-        # 给 echo 喂空 JSON-RPC stdin, 超时 5s 视为启动成功。
+      - name: Verify import and non-root runtime
         run: |
-          timeout 5 docker run --rm -i dbjavagenix:ci </dev/null || rc=$?
-          # MCP server 在没收到合法 JSON-RPC 时通常自然退出,
-          # 退出码 0 / 124 (timeout) / 1 (无输入) 都视为镜像能启动。
-          if [ "${rc:-0}" -gt 1 ] && [ "${rc:-0}" -ne 124 ]; then
-            echo "Container failed to start (rc=$rc)"
+          docker run --rm --entrypoint python dbjavagenix:ci \
+            -c "import dbjavagenix; print(dbjavagenix.__version__)"
+          test "$(docker run --rm --entrypoint id dbjavagenix:ci -u)" != "0"
+
+  ci-success:
+    name: Required CI status
+    if: always()
+    needs: [metadata, quality, format, integration, templates, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when any required job failed or was cancelled
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || \
+                "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required CI jobs failed or was cancelled"
             exit 1
           fi
-          echo "Container started (rc=${rc:-0})"
+          echo "All required CI jobs passed"

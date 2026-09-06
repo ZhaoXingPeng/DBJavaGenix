@@ -1,4 +1,5 @@
 """Unit tests for database.dialect."""
+
 import pytest
 
 from dbjavagenix.database.dialect import (
@@ -132,6 +133,12 @@ class TestPostgreSQLDialect:
         assert self.d.java_type_for("TIMESTAMP WITH TIME ZONE") == "OffsetDateTime"
         # 普通 TIMESTAMP 仍是 LocalDateTime
         assert self.d.java_type_for("TIMESTAMP") == "LocalDateTime"
+
+    def test_information_schema_temporal_names(self):
+        assert self.d.java_type_for("TIME WITHOUT TIME ZONE") == "LocalTime"
+        assert self.d.java_type_for("TIMESTAMP WITHOUT TIME ZONE") == "LocalDateTime"
+        assert self.d.jdbc_type_for("TIME WITHOUT TIME ZONE") == "TIME"
+        assert self.d.jdbc_type_for("TIMESTAMP WITHOUT TIME ZONE") == "TIMESTAMP"
 
     def test_bytea(self):
         assert self.d.java_type_for("BYTEA") == "byte[]"

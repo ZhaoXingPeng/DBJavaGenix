@@ -1,4 +1,5 @@
 """Unit tests for standards_tools (MCP tool wrapping standards generators)."""
+
 import asyncio
 import json
 
@@ -11,7 +12,7 @@ from dbjavagenix.database.standards_tools import (
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 class TestToolDefinition:
@@ -39,9 +40,7 @@ class TestHandler:
 
     def test_include_files_subset(self):
         result = _run(
-            handle_generate_quality_configs(
-                {"include_files": ["editorconfig", "lombok"]}
-            )
+            handle_generate_quality_configs({"include_files": ["editorconfig", "lombok"]})
         )
         payload = json.loads(result[0].text)
         assert payload["file_count"] == 2
@@ -83,9 +82,7 @@ class TestHandler:
         assert "lombok.accessors.chain = true" in lombok["content"]
 
     def test_empty_include_files_means_all(self):
-        result = _run(
-            handle_generate_quality_configs({"include_files": []})
-        )
+        result = _run(handle_generate_quality_configs({"include_files": []}))
         payload = json.loads(result[0].text)
         assert payload["file_count"] == 5
 

@@ -1,4 +1,5 @@
 """Unit tests for mcp_apps.sampling."""
+
 import asyncio
 
 import pytest
@@ -11,7 +12,7 @@ from dbjavagenix.mcp_apps.sampling import (
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 class TestModelPreferences:
@@ -104,6 +105,7 @@ class TestSamplingClient:
 
     def test_propagates_system_prompt(self):
         captured = {}
+
         def dispatcher(p):
             captured["p"] = p
             return {"text": "ok"}

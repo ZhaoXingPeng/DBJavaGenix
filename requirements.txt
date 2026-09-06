@@ -3,7 +3,7 @@
 # 此文件为兼容场景保留, 与 pyproject.toml 保持一致
 
 # MCP 协议
-mcp>=1.6.0
+mcp>=1.6.0,<2.0
 
 # 数据验证
 pydantic>=2.10.0
