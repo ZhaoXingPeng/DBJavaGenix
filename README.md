@@ -88,7 +88,7 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 
 ### Phase 1 现代化基础
 - Python ≥ 3.11 / mcp ≥ 1.6 / Spring Boot 3.5 + Java 21 模板
-- 单元测试 360+,GitHub Actions CI 三 Job (lint / template-render / docker-build)
+- 单元测试 360+，GitHub Actions 分层 CI（提交策略、三版本质量、格式、数据库集成、模板、Docker、打包安装）
 - 多阶段 Dockerfile (`python:3.11-slim` + 非 root 用户)
 
 ### Phase 2 Skills 层与原子工具

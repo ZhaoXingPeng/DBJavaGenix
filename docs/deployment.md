@@ -171,7 +171,7 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 - [ ] **数据库**: 提供给 `db_connect_test` 的凭据可读 (`db_query_tables` 返回非空)
 - [ ] **模板**: `templates/java/sb35-java21/` 等目录存在 (Docker 镜像内已包含)
 - [ ] **凭据**: `ANTHROPIC_API_KEY` 通过环境变量而非镜像内置 (避免泄露)
-- [ ] **CI**: GitHub Actions 全绿 (lint + unit + docker build)
+- [ ] **CI**: GitHub Actions 全绿（提交策略、质量矩阵、格式、数据库集成、模板、Docker、打包安装）
 
 ## 六、常见排障
 
