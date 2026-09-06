@@ -19,6 +19,140 @@ from ..utils.pom_analyzer import PomAnalyzer
 logger = logging.getLogger(__name__)
 
 
+_READ_ONLY_FORBIDDEN_WORDS = {
+    "ALTER",
+    "CREATE",
+    "DELETE",
+    "DROP",
+    "GRANT",
+    "INSERT",
+    "MERGE",
+    "REPLACE",
+    "REVOKE",
+    "TRUNCATE",
+    "UPDATE",
+}
+
+
+def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
+    """Tokenize enough SQL to enforce the single, read-only statement contract."""
+    tokens: List[tuple[str, str]] = []
+    index = 0
+    length = len(query)
+
+    while index < length:
+        char = query[index]
+        if char.isspace():
+            index += 1
+            continue
+
+        if query.startswith("/*", index) or query.startswith("--", index) or char == "#":
+            raise MCPServiceError("SQL comments are not allowed in read-only queries")
+
+        if char in "'\"`":
+            quote = char
+            start = index
+            index += 1
+            while index < length:
+                if query[index] == "\\" and quote == "'":
+                    index += 2
+                    continue
+                if query[index] == quote:
+                    if index + 1 < length and query[index + 1] == quote:
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                index += 1
+            else:
+                raise MCPServiceError("Unterminated quoted value in SQL query")
+            tokens.append(("quoted", query[start:index]))
+            continue
+
+        if char.isalpha() or char == "_":
+            start = index
+            index += 1
+            while index < length and (query[index].isalnum() or query[index] in "_$"):
+                index += 1
+            tokens.append(("word", query[start:index].upper()))
+            continue
+
+        if char == ";":
+            tokens.append(("symbol", char))
+        else:
+            tokens.append(("symbol", char))
+        index += 1
+
+    return tokens
+
+
+def _validate_read_only_query(query: Any) -> str:
+    """Validate and normalize one SQL SELECT statement for the public query tool."""
+    if not isinstance(query, str):
+        raise MCPServiceError("The query must be a SQL string")
+
+    normalized = query.strip()
+    if not normalized:
+        raise MCPServiceError("The query must not be empty")
+
+    tokens = _tokenize_read_only_sql(normalized)
+    if not tokens:
+        raise MCPServiceError("The query must not be empty")
+
+    semicolon_indexes = [index for index, token in enumerate(tokens) if token == ("symbol", ";")]
+    if semicolon_indexes:
+        if semicolon_indexes != [len(tokens) - 1]:
+            raise MCPServiceError("Only one SQL statement is allowed")
+        normalized = normalized[: normalized.rfind(";")].rstrip()
+        tokens = tokens[:-1]
+
+    first_word = next((value for kind, value in tokens if kind == "word"), None)
+    if first_word not in {"SELECT", "WITH"}:
+        raise MCPServiceError("Only SELECT queries are allowed for security reasons")
+
+    depth = 0
+    top_level_select = first_word == "SELECT"
+    for kind, value in tokens:
+        if kind == "symbol":
+            if value == "(":
+                depth += 1
+            elif value == ")":
+                depth -= 1
+                if depth < 0:
+                    raise MCPServiceError("Invalid SQL query parentheses")
+            continue
+
+        if kind != "word":
+            continue
+        if value in _READ_ONLY_FORBIDDEN_WORDS or value == "INTO":
+            raise MCPServiceError("Only read-only SELECT queries are allowed")
+        if first_word == "WITH" and value == "SELECT" and depth == 0:
+            top_level_select = True
+
+    if depth != 0:
+        raise MCPServiceError("Invalid SQL query parentheses")
+    if first_word == "WITH" and not top_level_select:
+        raise MCPServiceError("WITH queries must contain a top-level SELECT statement")
+
+    return normalized
+
+
+def _has_top_level_limit_clause(query: str) -> bool:
+    tokens = _tokenize_read_only_sql(query)
+    depth = 0
+    for index, (kind, value) in enumerate(tokens):
+        if kind == "symbol":
+            if value == "(":
+                depth += 1
+            elif value == ")":
+                depth -= 1
+        elif kind == "word" and value == "LIMIT" and depth == 0:
+            next_token = tokens[index + 1] if index + 1 < len(tokens) else None
+            if next_token and (next_token[0] == "symbol" or next_token[1] == "ALL"):
+                return True
+    return False
+
+
 def get_connection_tools() -> List[Tool]:
     """
     Get list of database connection and basic query MCP tools
@@ -615,17 +749,16 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
     """
     try:
         connection_id = arguments["connection_id"]
-        query = arguments["query"].strip()
+        query = _validate_read_only_query(arguments["query"])
         limit = arguments.get("limit", 100)
-        
-        # Security check: only allow SELECT queries
-        if not query.upper().startswith("SELECT"):
-            raise MCPServiceError("Only SELECT queries are allowed for security reasons")
-        
+
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 0 <= limit <= 10_000:
+            raise MCPServiceError("The limit must be an integer between 0 and 10000")
+
         # Add LIMIT if not present
-        if "LIMIT" not in query.upper():
+        if not _has_top_level_limit_clause(query):
             query = f"{query} LIMIT {limit}"
-        
+
         results = connection_manager.execute_query(connection_id, query)
         
         response = {

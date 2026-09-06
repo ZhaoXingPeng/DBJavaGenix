@@ -81,6 +81,7 @@ dbjavagenix = ["templates/**/*", "config/**/*"]
 line-length = 100
 target-version = "py311"
 extend-exclude = [".eggs", ".git", ".mypy_cache", ".venv", "build", "dist", "node_modules"]
+force-exclude = true
 
 [tool.ruff.lint]
 # 渐进引入: 先只检查真 bug 类规则(pyflakes F, 部分 E),
@@ -95,6 +96,8 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+# Legacy module is migrated incrementally; avoid whole-file formatter churn.
+exclude = ["src/dbjavagenix/database/mcp_tools.py"]
 
 [tool.mypy]
 python_version = "3.11"
