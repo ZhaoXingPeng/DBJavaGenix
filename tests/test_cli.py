@@ -211,3 +211,13 @@ def test_list_tables_forwards_schema_filter(monkeypatch):
 
     assert calls["args"] == {"connection_id": "pg-1", "database": "app", "schema": "tenant_a"}
     assert calls["close"] == "pg-1"
+
+
+def test_extract_table_name_accepts_current_and_legacy_table_shapes():
+    from dbjavagenix.cli import _extract_table_name
+
+    assert _extract_table_name("users") == "users"
+    assert _extract_table_name({"table_name": "orders"}) == "orders"
+    assert _extract_table_name({"name": "audit_log"}) == "audit_log"
+    assert _extract_table_name({"table_name": ""}) is None
+    assert _extract_table_name(42) is None

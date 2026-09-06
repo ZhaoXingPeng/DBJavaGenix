@@ -43,6 +43,16 @@ app = typer.Typer(
 console = Console()
 
 
+def _extract_table_name(table: object) -> Optional[str]:
+    """Normalize table entries returned by current and legacy MCP adapters."""
+    if isinstance(table, str):
+        return table
+    if isinstance(table, dict):
+        name = table.get("table_name") or table.get("name")
+        return str(name) if name else None
+    return None
+
+
 def show_ascii_icon():
     """Display the DBJavaGenix ASCII icon"""
     icon_path = Path(__file__).parent.parent / "config" / "ASCII_ICON.txt"
@@ -181,7 +191,9 @@ def generate(
 
             if tables_result.get("success"):
                 all_tables = tables_result["tables"]
-                target_tables = [t["table_name"] for t in all_tables]
+                target_tables = [
+                    table_name for table in all_tables if (table_name := _extract_table_name(table))
+                ]
                 console.print(
                     f"[cyan]Found {len(target_tables)} tables to generate:[/cyan] {', '.join(target_tables)}"
                 )
