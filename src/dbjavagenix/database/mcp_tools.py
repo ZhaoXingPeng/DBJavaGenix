@@ -698,7 +698,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
 
         elif config.type == DatabaseType.POSTGRESQL:
             query = """
-            SELECT table_name
+            SELECT table_name, table_schema
             FROM information_schema.tables
             WHERE table_catalog = %s
               AND table_type = 'BASE TABLE'
@@ -720,17 +720,25 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         
         # Extract table names
         tables = []
+        table_references = []
         for row in results:
             if isinstance(row, dict):
                 # Get the first column value (table name)
-                table_name = list(row.values())[0]
+                table_name = row.get("table_name", list(row.values())[0])
                 tables.append(table_name)
+                table_references.append(
+                    {
+                        "table_name": table_name,
+                        "schema": row.get("table_schema"),
+                    }
+                )
         
         response = {
             "success": True,
             "database": database,
             "schema": schema,
             "tables": tables,
+            "table_references": table_references,
             "count": len(tables)
         }
         
