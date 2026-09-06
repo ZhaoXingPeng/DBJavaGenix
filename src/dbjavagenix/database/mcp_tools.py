@@ -22,6 +22,7 @@ from ..database.connection_manager import connection_manager
 from ..database.introspection import DatabaseIntrospector
 from ..config.config_manager import ConfigManager
 from ..utils.pom_analyzer import PomAnalyzer
+from ..utils.security import redact_sensitive_data, redact_sensitive_text
 
 logger = logging.getLogger(__name__)
 
@@ -519,26 +520,28 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
         )]
         
     except DatabaseConnectionError as e:
+        safe_error = redact_sensitive_text(e)
         error_response = {
             "success": False,
             "error": "connection_failed",
-            "message": str(e)
+            "message": safe_error
         }
         return [TextContent(
             type="text",
-            text=f"Database connection failed: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Database connection failed: {safe_error}\n\nRaw Response: {error_response}"
         )]
         
     except Exception as e:
         logger.error(f"Unexpected error in db_connect_test: {e}")
+        safe_error = redact_sensitive_text(e)
         error_response = {
             "success": False,
-            "error": "unexpected_error", 
-            "message": f"Unexpected error: {str(e)}"
+            "error": "unexpected_error",
+            "message": f"Unexpected error: {safe_error}"
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {error_response}"
+            text=f"Unexpected error: {safe_error}\n\nRaw Response: {error_response}"
         )]
 
 
@@ -3010,6 +3013,12 @@ async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextC
             'logging': _get(effective_config, 'logging', {}),
         }
 
+        # Configuration files can contain database passwords, API keys, and tokens.
+        # Keep the full structure useful for callers while ensuring no secret crosses
+        # the MCP response boundary.
+        safe_effective_config = redact_sensitive_data(effective_config)
+        safe_extracted = redact_sensitive_data(extracted)
+
         response = {
             'success': True,
             'project_root': str(project_root) if project_root else None,
@@ -3021,8 +3030,8 @@ async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextC
             'files_scanned': files_scanned,
             'profiles_available': sorted(list(profiles_found.keys())),
             'active_profile': profile or _get(effective_config, 'spring.profiles.active'),
-            'effective': extracted,
-            'raw_config': effective_config,
+            'effective': safe_extracted,
+            'raw_config': safe_effective_config,
         }
 
         text_lines = []
@@ -3031,7 +3040,7 @@ async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextC
         text_lines.append(f"Build Tool: {build_tool or 'Unknown'}  | Spring Boot: {spring_boot_version or 'Unknown'}")
         text_lines.append(f"Base Package: {base_package or 'Unknown'}")
         text_lines.append(f"Profiles: {', '.join(response['profiles_available']) if response['profiles_available'] else 'None'}")
-        eff = extracted
+        eff = safe_extracted
         text_lines.append('— Effective —')
         text_lines.append(f"app.name={eff.get('spring',{}).get('application',{}).get('name')}")
         text_lines.append(f"server.port={eff.get('server',{}).get('port')}")

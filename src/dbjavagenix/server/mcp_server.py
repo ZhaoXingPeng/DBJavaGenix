@@ -62,6 +62,7 @@ from ..database.observability_tools import (
     handle_server_metrics,
 )
 from ..utils.metrics import GLOBAL_TOOL_METRICS
+from ..utils.security import redact_sensitive_data
 from ..utils.logging_config import configure_logging
 from ..utils.tool_registry import filter_tools_for_listing
 
@@ -156,7 +157,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
     Returns:
         Tool execution results
     """
-    logger.info(f"Calling tool: {name} with arguments: {arguments}")
+    logger.info("Calling tool: %s with arguments: %s", name, redact_sensitive_data(arguments))
     import time as _time_for_metrics
     _start_perf = _time_for_metrics.perf_counter()
     _is_error = False

@@ -10,6 +10,7 @@ from contextlib import contextmanager
 
 from ..core.models import DatabaseConfig, DatabaseType
 from ..core.exceptions import DatabaseConnectionError, DatabaseQueryError
+from ..utils.security import redact_sensitive_text
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +82,9 @@ class ConnectionManager:
             return connection_id
             
         except Exception as e:
-            logger.error(f"Failed to create connection: {e}")
-            raise DatabaseConnectionError(f"Failed to connect to database: {str(e)}")
+            safe_error = redact_sensitive_text(e, (config.password,))
+            logger.error("Failed to create connection: %s", safe_error)
+            raise DatabaseConnectionError(f"Failed to connect to database: {safe_error}") from e
     
     def get_connection(self, connection_id: str) -> Any:
         """
