@@ -75,6 +75,10 @@ class TestSearchQuery:
         names = {r["name"] for r in results}
         assert "db_table_foreign_keys" in names
 
+    def test_schema_algorithm_search(self):
+        results = search_tools_by_query("topological")
+        assert results[0]["name"] == "schema_topo_order"
+
     def test_multi_token_search(self):
         results = search_tools_by_query("render entity")
         names = [r["name"] for r in results]

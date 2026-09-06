@@ -62,6 +62,12 @@ from ..database.observability_tools import (
     handle_server_health,
     handle_server_metrics,
 )
+from ..database.schema_algorithms_tools import (
+    get_schema_algorithm_tools,
+    handle_schema_topo_order,
+    handle_schema_cluster_tables,
+    handle_schema_check_cycles,
+)
 from ..utils.metrics import GLOBAL_TOOL_METRICS
 from ..utils.security import redact_sensitive_data, redact_sensitive_text
 from ..utils.logging_config import configure_logging
@@ -86,6 +92,7 @@ _TOOL_FACTORIES: tuple[ToolFactory, ...] = (
     get_visualization_tools,
     get_ai_tools,
     get_observability_tools,
+    get_schema_algorithm_tools,
     get_discovery_tools,
 )
 

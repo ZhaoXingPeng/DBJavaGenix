@@ -24,6 +24,7 @@ from mcp.types import Tool
 @dataclass
 class ToolMetadata:
     """单个工具的元数据"""
+
     name: str
     tags: Set[str] = field(default_factory=set)
     category: str = "misc"
@@ -100,6 +101,25 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         tags={"index", "indexes", "btree"},
         category="schema",
         description_brief="获取表的索引信息",
+    ),
+    # ---- Schema 图算法 ----
+    "schema_topo_order": ToolMetadata(
+        name="schema_topo_order",
+        tags={"schema", "graph", "topological", "sort", "dependency", "ddl"},
+        category="schema-algorithms",
+        description_brief="按外键依赖生成确定性的表创建顺序",
+    ),
+    "schema_cluster_tables": ToolMetadata(
+        name="schema_cluster_tables",
+        tags={"schema", "graph", "cluster", "module", "union-find"},
+        category="schema-algorithms",
+        description_brief="使用 Union-Find 按外键连通性聚类业务表",
+    ),
+    "schema_check_cycles": ToolMetadata(
+        name="schema_check_cycles",
+        tags={"schema", "graph", "cycle", "foreign-key", "dependency"},
+        category="schema-algorithms",
+        description_brief="检测外键依赖环并返回不可排序的表",
     ),
     # ---- 代码生成 (legacy) ----
     "db_codegen_analyze": ToolMetadata(
@@ -250,9 +270,8 @@ def is_progressive_mode_enabled() -> bool:
 # 搜索逻辑
 # ============================================================
 
-def search_tools_by_query(
-    query: str, limit: int = 10
-) -> List[Dict[str, str]]:
+
+def search_tools_by_query(query: str, limit: int = 10) -> List[Dict[str, str]]:
     """按 query 搜索匹配的工具元数据。
 
     匹配规则 (case-insensitive):
@@ -270,9 +289,7 @@ def search_tools_by_query(
     """
     if not query or not query.strip():
         # 空 query → 返回 always_visible + 类别样例
-        candidates = [
-            m for m in _REGISTRY.values() if m.always_visible
-        ]
+        candidates = [m for m in _REGISTRY.values() if m.always_visible]
         return [
             {
                 "name": m.name,

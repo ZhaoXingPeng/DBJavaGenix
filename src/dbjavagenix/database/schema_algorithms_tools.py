@@ -174,6 +174,12 @@ SCHEMA_ALGORITHM_TOOLS = [
     SCHEMA_CYCLE_TOOL,
 ]
 
+
+def get_schema_algorithm_tools() -> list[Tool]:
+    """Return the schema graph tools for canonical MCP registration."""
+    return list(SCHEMA_ALGORITHM_TOOLS)
+
+
 SCHEMA_ALGORITHM_HANDLERS = {
     "schema_topo_order": handle_schema_topo_order,
     "schema_cluster_tables": handle_schema_cluster_tables,
