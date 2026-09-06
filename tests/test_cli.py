@@ -5,6 +5,10 @@
 """
 
 import importlib
+from types import SimpleNamespace
+
+import pytest
+from typer import Exit
 
 
 def test_cli_module_imports():
@@ -34,3 +38,138 @@ def test_dbjavagenix_error_format():
 
     err = DBJavaGenixError("Test error", "TEST_ERROR")
     assert str(err) == "[TEST_ERROR] Test error"
+
+
+def _fake_config():
+    return SimpleNamespace(
+        database=SimpleNamespace(
+            type="sqlite",
+            host="",
+            port=0,
+            username="",
+            password="",
+            database=":memory:",
+            charset="utf8mb4",
+        ),
+        generation=SimpleNamespace(
+            use_mybatis_plus=True,
+            author="Test Author",
+            package_name="com.example.generated",
+        ),
+    )
+
+
+def test_analyze_runs_database_analysis_and_closes_connection(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    calls = {}
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=_fake_config)
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_connect_test",
+        lambda args: calls.update(connect=args) or {"success": True, "connection_id": "conn-1"},
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_codegen_analyze",
+        lambda args: (
+            calls.update(analyze=args)
+            or {
+                "success": True,
+                "table_info": {
+                    "columns": [{"name": "id", "type": "integer", "java_type": "Integer"}]
+                },
+                "java_types": ["Integer"],
+                "relationships": {"primary_keys": ["id"], "foreign_keys": [], "indexes": []},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        mod.connection_manager,
+        "close_connection",
+        lambda connection_id: calls.update(close=connection_id),
+    )
+
+    mod.analyze("users")
+
+    assert calls["analyze"]["connection_id"] == "conn-1"
+    assert calls["analyze"]["template_category"] == "MybatisPlus-Mixed"
+    assert calls["close"] == "conn-1"
+
+
+def test_analyze_connection_failure_exits_without_analysis(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=_fake_config)
+    )
+    monkeypatch.setattr(
+        mod, "handle_db_connect_test", lambda _args: {"success": False, "error": "offline"}
+    )
+    with pytest.raises(Exit) as exc_info:
+        mod.analyze("users")
+    assert exc_info.value.exit_code == 1
+
+
+def test_analyze_failure_closes_connection(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    calls = []
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=_fake_config)
+    )
+    monkeypatch.setattr(
+        mod, "handle_db_connect_test", lambda _args: {"success": True, "connection_id": "conn-2"}
+    )
+    monkeypatch.setattr(
+        mod, "handle_db_codegen_analyze", lambda _args: {"success": False, "error": "bad table"}
+    )
+    monkeypatch.setattr(mod.connection_manager, "close_connection", calls.append)
+
+    with pytest.raises(Exit) as exc_info:
+        mod.analyze("users")
+    assert exc_info.value.exit_code == 1
+    assert calls == ["conn-2"]
+
+
+def test_analyze_unexpected_failure_closes_connection(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    calls = []
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=_fake_config)
+    )
+    monkeypatch.setattr(
+        mod, "handle_db_connect_test", lambda _args: {"success": True, "connection_id": "conn-3"}
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_codegen_analyze",
+        lambda _args: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    monkeypatch.setattr(mod.connection_manager, "close_connection", calls.append)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        mod.analyze("users")
+    assert calls == ["conn-3"]
+
+
+def test_codegen_analysis_wrapper_parses_structured_response(monkeypatch):
+    from dbjavagenix import cli_helpers
+    from mcp.types import TextContent
+
+    async def fake_analyze(_arguments):
+        return [
+            TextContent(
+                type="text",
+                text='Report\n\nRaw Response: {"success": true, "table_name": "users"}',
+            )
+        ]
+
+    monkeypatch.setattr(cli_helpers, "async_handle_db_codegen_analyze", fake_analyze)
+
+    result = cli_helpers.handle_db_codegen_analyze({"connection_id": "conn-1"})
+
+    assert result == {"success": True, "table_name": "users"}

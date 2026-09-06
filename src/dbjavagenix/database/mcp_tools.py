@@ -1,6 +1,7 @@
 """
 MCP tools for database connection and basic query operations
 """
+import json
 import logging
 import os
 import re
@@ -1830,7 +1831,10 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         result_text += f"  Has BigDecimal Fields: {context.get('hasBigDecimalField', False)}\n"
         result_text += f"  Has Primary Key: {'Yes' if context.get('primaryKey') else 'No'}\n"
         
-        result_text += f"\nRaw Analysis Result: {analysis_result}"
+        # Keep a structured payload for non-MCP callers such as the CLI.
+        result_text += "\n\nRaw Response: " + json.dumps(
+            {"success": True, **analysis_result}, ensure_ascii=False
+        )
         
         return [TextContent(
             type="text",
