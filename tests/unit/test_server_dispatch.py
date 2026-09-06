@@ -1,5 +1,7 @@
 """Contract tests for canonical MCP tool listing and dispatch."""
 
+import json
+
 from mcp.types import TextContent, Tool
 import pytest
 
@@ -31,6 +33,38 @@ async def test_dispatch_resolves_handler_from_canonical_name(monkeypatch):
 
     assert result[0].text == "ok"
     assert calls == [{"verbose": True}]
+
+
+@pytest.mark.asyncio
+async def test_unknown_tool_returns_structured_error(monkeypatch):
+    monkeypatch.setattr(mcp_server, "_tool_handlers", lambda: {})
+
+    result = await mcp_server.handle_call_tool("missing_tool", {})
+    payload = json.loads(result[0].text)
+
+    assert payload == {
+        "success": False,
+        "error": "unknown_tool",
+        "tool": "missing_tool",
+        "message": "Unknown tool: missing_tool",
+    }
+
+
+@pytest.mark.asyncio
+async def test_handler_exception_returns_redacted_structured_error(monkeypatch):
+    async def fail(_arguments):
+        raise RuntimeError("failed for jdbc:mysql://reader:db-secret@db/app")
+
+    monkeypatch.setattr(mcp_server, "_tool_handlers", lambda: {"failing_tool": fail})
+
+    result = await mcp_server.handle_call_tool("failing_tool", {})
+    payload = json.loads(result[0].text)
+
+    assert payload["success"] is False
+    assert payload["error"] == "tool_execution_failed"
+    assert payload["tool"] == "failing_tool"
+    assert payload["message"] == "failed for jdbc:mysql://reader:***@db/app"
+    assert "db-secret" not in result[0].text
 
 
 def test_handler_registry_rejects_duplicate_tool_names(monkeypatch):
