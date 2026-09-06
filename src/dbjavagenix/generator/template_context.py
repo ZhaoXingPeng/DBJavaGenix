@@ -5,16 +5,27 @@
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-import re
 from ..core.models import TableInfo, ColumnInfo, DatabaseType
+from ..database.dialect import DialectAdapter, get_dialect
 
 
 class TemplateContextBuilder:
     """模板上下文构建器"""
     
-    def __init__(self, author: str = "ZXP", package_name: str = "com.example"):
+    def __init__(
+        self,
+        author: str = "ZXP",
+        package_name: str = "com.example",
+        database_type: DatabaseType | str = DatabaseType.MYSQL,
+        dialect: Optional[DialectAdapter] = None,
+    ):
         self.author = author
         self.package_name = package_name
+        if dialect is not None:
+            self.dialect = dialect
+        else:
+            db_name = database_type.value if isinstance(database_type, DatabaseType) else str(database_type)
+            self.dialect = get_dialect(db_name)
         self.date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     def build_context(self, table_info: TableInfo, template_category: str = "Default",
@@ -181,7 +192,7 @@ class TemplateContextBuilder:
             analysis_result = analyzer.analyze_project_dependencies(
                 project_root=project_root,
                 template_category=template_category,
-                database_type="mysql"  # 默认数据库类型
+                database_type=self.dialect.name
             )
             return analysis_result.get("technology_stack", TechnologyStack())
         except Exception:
@@ -314,32 +325,36 @@ class TemplateContextBuilder:
         java_types = {self._map_java_type(col.data_type) for col in columns}
         
         # 时间类型导入
-        if "LocalDateTime" in java_types:
-            imports.append("java.time.LocalDateTime")
-        if "LocalDate" in java_types:
-            imports.append("java.time.LocalDate")
-        if "LocalTime" in java_types:
-            imports.append("java.time.LocalTime")
-        if "BigDecimal" in java_types:
-            imports.append("java.math.BigDecimal")
+        import_by_type = {
+            "LocalDateTime": "java.time.LocalDateTime",
+            "LocalDate": "java.time.LocalDate",
+            "LocalTime": "java.time.LocalTime",
+            "OffsetDateTime": "java.time.OffsetDateTime",
+            "OffsetTime": "java.time.OffsetTime",
+            "Instant": "java.time.Instant",
+            "BigDecimal": "java.math.BigDecimal",
+            "BigInteger": "java.math.BigInteger",
+            "UUID": "java.util.UUID",
+        }
+        imports.extend(
+            import_by_type[java_type]
+            for java_type in java_types
+            if java_type in import_by_type
+        )
         
         return sorted(imports)
     
     def _has_date_field(self, columns: List[ColumnInfo]) -> bool:
         """检查是否包含日期字段"""
-        date_types = ['DATETIME', 'TIMESTAMP', 'DATE', 'TIME']
-        return any(col.data_type.upper() in date_types for col in columns)
+        return any(self.dialect.is_date_type(col.data_type) for col in columns)
     
     def _has_big_decimal_field(self, columns: List[ColumnInfo]) -> bool:
         """检查是否包含 BigDecimal 字段"""
-        decimal_types = ['DECIMAL', 'NUMERIC', 'MONEY']
-        return any(col.data_type.upper() in decimal_types for col in columns)
+        return any(self.dialect.is_decimal_type(col.data_type) for col in columns)
     
     def _is_string_type(self, db_type: str) -> bool:
         """检查是否为字符串类型 (剥离 `(n)` 后比对, 修复 `VARCHAR(64)` 一直被判 False 的 bug)"""
-        string_types = ['VARCHAR', 'CHAR', 'TEXT', 'LONGTEXT', 'MEDIUMTEXT', 'TINYTEXT', 'NVARCHAR', 'NCHAR']
-        base_type = re.sub(r'\([^)]*\)', '', db_type.upper())
-        return base_type in string_types
+        return self.dialect.is_string_type(db_type)
     
     def _to_pascal_case(self, name: str) -> str:
         """转换为 PascalCase"""
@@ -354,113 +369,11 @@ class TemplateContextBuilder:
     
     def _map_java_type(self, db_type: str) -> str:
         """映射数据库类型到 Java 类型"""
-        type_mapping = {
-            # 整数类型
-            'TINYINT': 'Byte',
-            'SMALLINT': 'Short', 
-            'MEDIUMINT': 'Integer',
-            'INT': 'Integer',
-            'INTEGER': 'Integer',
-            'BIGINT': 'Long',
-            
-            # 浮点类型
-            'FLOAT': 'Float',
-            'DOUBLE': 'Double',
-            'DECIMAL': 'BigDecimal',
-            'NUMERIC': 'BigDecimal',
-            
-            # 字符串类型
-            'CHAR': 'String',
-            'VARCHAR': 'String',
-            'TEXT': 'String',
-            'LONGTEXT': 'String',
-            'MEDIUMTEXT': 'String',
-            'TINYTEXT': 'String',
-            'NCHAR': 'String',
-            'NVARCHAR': 'String',
-            
-            # 日期时间类型
-            'DATE': 'LocalDate',
-            'TIME': 'LocalTime',
-            'DATETIME': 'LocalDateTime',
-            'TIMESTAMP': 'LocalDateTime',
-            'YEAR': 'Integer',
-            
-            # 布尔类型
-            'BOOLEAN': 'Boolean',
-            'TINYINT(1)': 'Boolean',
-            
-            # 二进制类型
-            'BINARY': 'byte[]',
-            'VARBINARY': 'byte[]',
-            'BLOB': 'byte[]',
-            'LONGBLOB': 'byte[]',
-            'MEDIUMBLOB': 'byte[]',
-            'TINYBLOB': 'byte[]',
-            
-            # JSON 类型
-            'JSON': 'String',
-        }
-        
-        # 处理带长度的类型，如 VARCHAR(255)
-        base_type = re.sub(r'\([^)]*\)', '', db_type.upper())
-        
-        return type_mapping.get(base_type, 'String')
+        return self.dialect.java_type_for(db_type)
     
     def _map_jdbc_type(self, db_type: str) -> str:
         """映射数据库类型到 JDBC 类型"""
-        jdbc_mapping = {
-            # 整数类型
-            'TINYINT': 'TINYINT',
-            'SMALLINT': 'SMALLINT',
-            'MEDIUMINT': 'INTEGER',
-            'INT': 'INTEGER',
-            'INTEGER': 'INTEGER',
-            'BIGINT': 'BIGINT',
-            
-            # 浮点类型
-            'FLOAT': 'FLOAT',
-            'DOUBLE': 'DOUBLE',
-            'DECIMAL': 'DECIMAL',
-            'NUMERIC': 'NUMERIC',
-            
-            # 字符串类型
-            'CHAR': 'CHAR',
-            'VARCHAR': 'VARCHAR',
-            'TEXT': 'LONGVARCHAR',
-            'LONGTEXT': 'LONGVARCHAR',
-            'MEDIUMTEXT': 'LONGVARCHAR',
-            'TINYTEXT': 'VARCHAR',
-            'NCHAR': 'NCHAR',
-            'NVARCHAR': 'NVARCHAR',
-            
-            # 日期时间类型
-            'DATE': 'DATE',
-            'TIME': 'TIME',
-            'DATETIME': 'TIMESTAMP',
-            'TIMESTAMP': 'TIMESTAMP',
-            'YEAR': 'INTEGER',
-            
-            # 布尔类型
-            'BOOLEAN': 'BOOLEAN',
-            'TINYINT(1)': 'BOOLEAN',
-            
-            # 二进制类型
-            'BINARY': 'BINARY',
-            'VARBINARY': 'VARBINARY',
-            'BLOB': 'BLOB',
-            'LONGBLOB': 'LONGVARBINARY',
-            'MEDIUMBLOB': 'LONGVARBINARY',
-            'TINYBLOB': 'VARBINARY',
-            
-            # JSON 类型
-            'JSON': 'LONGVARCHAR',
-        }
-        
-        # 处理带长度的类型
-        base_type = re.sub(r'\([^)]*\)', '', db_type.upper())
-        
-        return jdbc_mapping.get(base_type, 'VARCHAR')
+        return self.dialect.jdbc_type_for(db_type)
 
 
 class TemplateConfigManager:
