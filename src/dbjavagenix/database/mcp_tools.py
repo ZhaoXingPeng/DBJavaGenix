@@ -21,6 +21,7 @@ from ..core.exceptions import (
 )
 from ..database.connection_manager import connection_manager
 from ..database.introspection import DatabaseIntrospector
+from ..database.sql_identifiers import quote_mysql_identifier
 from ..config.config_manager import ConfigManager
 from ..utils.pom_analyzer import PomAnalyzer
 from ..utils.security import redact_sensitive_data, redact_sensitive_text
@@ -163,12 +164,11 @@ def _has_top_level_limit_clause(query: str) -> bool:
 
 
 def _quote_mysql_identifier(identifier: Any) -> str:
-    """Quote one MySQL identifier and reject control characters."""
-    if not isinstance(identifier, str) or not identifier:
-        raise MCPServiceError("MySQL identifier must be a non-empty string")
-    if any(ord(char) < 32 or ord(char) == 127 for char in identifier):
-        raise MCPServiceError("MySQL identifier must not contain control characters")
-    return f"`{identifier.replace('`', '``')}`"
+    """Adapt shared identifier validation to the MCP error contract."""
+    try:
+        return quote_mysql_identifier(identifier)
+    except ValueError as exc:
+        raise MCPServiceError(str(exc)) from exc
 
 
 def get_connection_tools() -> List[Tool]:

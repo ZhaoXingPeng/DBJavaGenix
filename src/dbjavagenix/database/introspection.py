@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from ..core.exceptions import DatabaseAnalysisError, DatabaseConnectionError
 from ..core.models import DatabaseConfig, DatabaseType
+from .sql_identifiers import quote_mysql_identifier
 
 
 class DatabaseIntrospector:
@@ -46,6 +47,14 @@ class DatabaseIntrospector:
     def _sqlite_identifier(value: str) -> str:
         """Quote a SQLite identifier used by PRAGMA statements."""
         return value.replace("'", "''")
+
+    @staticmethod
+    def _mysql_identifier(value: str) -> str:
+        """Quote a MySQL identifier using the metadata error contract."""
+        try:
+            return quote_mysql_identifier(value)
+        except ValueError as exc:
+            raise DatabaseAnalysisError(str(exc)) from exc
 
     def list_tables(self, connection_id: str) -> List[str]:
         config = self._config(connection_id)
@@ -353,7 +362,7 @@ class DatabaseIntrospector:
         config = self._config(connection_id)
         if config.type == DatabaseType.MYSQL:
             rows = self.connection_manager.execute_query(
-                connection_id, f"SHOW INDEX FROM `{table_name.replace('`', '``')}`"
+                connection_id, f"SHOW INDEX FROM {self._mysql_identifier(table_name)}"
             )
             return [
                 {
