@@ -63,17 +63,15 @@ cp config/config.example.yaml config.yaml
 ### 5. 运行测试
 
 ```bash
-# 运行全部测试
-pytest
+# 运行单元测试
+PYTHONPATH=src python -m pytest tests/unit/ -q
 
-# 运行指定测试
-pytest tests/test_models.py
+# 运行数据库集成测试（需要 Docker）
+PYTHONPATH=src python -m pytest tests/integration/ -q
 
-# 运行覆盖率测试
-pytest --cov=src/dbjavagenix
-
-# 运行集成测试
-pytest tests/test_integration.py -v
+# 运行模板和 MCP Apps 验证脚本
+PYTHONPATH=src python scripts/verify_templates.py
+PYTHONPATH=src python scripts/verify_mcp_apps.py
 ```
 
 ### 6. 验证安装
@@ -94,36 +92,27 @@ python -m dbjavagenix.cli server
 
 ```bash
 # 运行所有单元测试
-pytest tests/unit/ -v
+PYTHONPATH=src python -m pytest tests/unit/ -q
 
 # 测试特定模块
-pytest tests/test_config.py tests/test_models.py
+PYTHONPATH=src python -m pytest tests/unit/test_config.py tests/unit/test_models.py -q
 
-# 生成测试报告
-pytest --cov=src/dbjavagenix --cov-report=html
+# 生成覆盖率报告
+PYTHONPATH=src python -m pytest tests/unit/ --cov=src/dbjavagenix --cov-report=html
 ```
 
 ### 集成测试
 
 ```bash
-# 测试数据库连接
-pytest tests/test_database.py -v
-
-# 测试代码生成流程
-pytest tests/test_generator.py -v
-
-# 测试MCP服务器
-pytest tests/test_server.py -v
+# Testcontainers 数据库集成测试（需要 Docker）
+PYTHONPATH=src python -m pytest tests/integration/ -q
 ```
 
 ### 性能测试
 
 ```bash
-# 测试数据库查询性能
-pytest tests/test_performance.py -v
-
-# 测试代码生成性能
-pytest tests/test_codegen_performance.py -v
+# 运行可复现的本地元数据基线
+PYTHONPATH=src python scripts/benchmark_introspection.py --iterations 30 --warmup 5
 ```
 
 ## 🛠️ 开发工具
@@ -131,17 +120,14 @@ pytest tests/test_codegen_performance.py -v
 ### 代码格式化
 
 ```bash
-# 格式化代码
-black src/ tests/
+# 检查代码质量
+PYTHONPATH=src python -m ruff check src/ tests/ scripts/
 
-# 检查代码风格
-flake8 src/ tests/
+# 检查 Python 文件格式
+python -m ruff format --check src/ tests/ scripts/
 
-# 类型检查
-mypy src/dbjavagenix/
-
-# 一键格式化
-./scripts/format.sh  # 如果有的话
+# 需要时格式化指定文件
+python -m ruff format path/to/changed_file.py
 ```
 
 ### Pre-commit 钩子
@@ -161,13 +147,13 @@ pre-commit autoupdate
 
 **VS Code 推荐插件：**
 - Python
-- Pylance  
-- Black Formatter
+- Pylance
+- Ruff
 - autoDocstring
 - GitLens
 
 **PyCharm 配置：**
-- 启用 Black 作为代码格式化工具
+- 启用 Ruff 作为代码检查和格式化工具
 - 配置 mypy 作为外部工具
 - 设置项目解释器为虚拟环境
 
@@ -196,11 +182,15 @@ DBJavaGenix/
 
 ## 开发流程
 
-1. 创建新分支进行开发
-2. 编写代码和测试
-3. 运行测试确保通过
-4. 提交代码（自动运行pre-commit钩子）
-5. 创建Pull Request
+本项目的提交、审查和合并规范以
+[`docs/engineering-standards.md`](engineering-standards.md) 为唯一入口。
+
+1. 先创建或补充 Issue，写清背景、验收标准、非目标和风险。
+2. 从 `main` 创建带 Issue 编号的短分支，例如 `fix/57-governance-entrypoint`。
+3. 以小步提交实现一个可验证行为，提交标题使用 Gitmoji + Conventional Commits。
+4. 运行相关测试、Ruff 检查和格式检查；涉及跨模块改动时运行完整单元测试。
+5. 创建 PR，使用 `Closes #123` 或 `Refs #123` 关联 Issue，并记录实验、结果、风险和回滚方式。
+6. CI 和审查通过后使用 squash merge 合并到 `main`，不直接推送功能代码。
 
 ## 调试技巧
 
@@ -264,29 +254,32 @@ git push origin v0.1.1
 ### 代码风格
 
 - 遵循 PEP 8 代码风格
-- 使用 Black 进行代码格式化
-- 类型注解覆盖率 > 90%
+- 使用 Ruff 进行代码检查和格式化
+- 新增或修改行为必须配套测试
 - 函数和类必须有文档字符串
 
 ### 提交规范
 
 ```
-feat: 新功能
-fix: 修复bug
-docs: 文档更新
-style: 代码格式调整
-refactor: 代码重构
-test: 测试相关
-chore: 构建过程或辅助工具的变动
+:sparkles: feat(scope): 新增功能
+:bug: fix(scope): 修复错误行为
+:books: docs(scope): 更新文档或规范
+:test_tube: test(scope): 补充或调整测试
+:recycle: refactor(scope): 重构实现
+:wrench: chore(scope): 维护性变更
 ```
+
+Gitmoji 必须与 Conventional Commits 类型匹配，标题首行不超过 72 个字符；Issue
+和 PR 的标题、正文默认使用中文，代码标识和命令保留原文。完整映射、正文顺序和
+合并门禁见 [`docs/engineering-standards.md`](engineering-standards.md)。
 
 ### Pull Request 流程
 
-1. Fork 项目到个人仓库
-2. 创建功能分支 `git checkout -b feature/new-feature`
-3. 提交更改 `git commit -m 'feat: add new feature'`
-4. 推送分支 `git push origin feature/new-feature`
-5. 创建 Pull Request
+1. 先创建或补充 Issue，避免没有验收标准的改动。
+2. 从 `main` 创建带 Issue 编号的分支。
+3. 每个提交只解决一个可验证主题，并在 PR 评论中记录实验输入、方法和结果。
+4. 推送分支后创建 PR，填写 `Closes #123` 或 `Refs #123`。
+5. 测试、质量门禁和审查通过后 squash merge；禁止直接向 `main` 推送功能代码。
 
 ## 🔧 常见问题
 
@@ -339,4 +332,4 @@ export PYTHONPATH=src  # Linux/Mac
 ---
 
 **维护者**: ZXP (2638265504@qq.com)  
-**最后更新**: 2025-09-05
+**最后更新**: 2026-09-07
