@@ -1835,7 +1835,8 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         analyzer = CodegenAnalyzer(connection_manager)
         
         # Analyze table for code generation (with project stack detection)
-        proj_struct = detect_springboot_project_structure()
+        project_path = arguments.get("project_path")
+        proj_struct = _detect_project_structure(project_path)
         project_root = str(proj_struct["project_root"]) if proj_struct.get("project_root") else None
         analysis_result = await analyzer.analyze_table_for_codegen(
             connection_id,
@@ -1960,6 +1961,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         include_swagger = arguments.get("include_swagger", True)
         include_lombok = arguments.get("include_lombok", True)
         include_mapstruct = arguments.get("include_mapstruct", True)
+        project_path = arguments.get("project_path")
         
         # Validate connection exists
         config = connection_manager.get_connection_info(connection_id)
@@ -1977,6 +1979,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             "create_missing_dirs": True,
             "template_category": template_category
         }
+        if project_path:
+            validation_args["project_path"] = project_path
         
         validation_result = await handle_springboot_validate_project(validation_args)
         validation_text = validation_result[0].text if validation_result else "Validation failed"
@@ -2002,6 +2006,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             "include_lombok": include_lombok,
             "include_mapstruct": include_mapstruct
         }
+        if project_path:
+            dependency_args["project_path"] = project_path
         
         dependency_analysis = await handle_springboot_analyze_dependencies(dependency_args)
         dependency_text = dependency_analysis[0].text if dependency_analysis else "Dependency analysis failed"
@@ -2060,7 +2066,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         generator = CodegenGenerator()
         
         # Step 1: Analyze table structure with all table names for prefix optimization
-        _ps = detect_springboot_project_structure()
+        _ps = _detect_project_structure(project_path)
         analysis_result = await analyzer.analyze_table_for_codegen(
             connection_id,
             table_name,
@@ -2135,14 +2141,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # 重新获取项目结构（可能在验证过程中已创建）
         # Allow caller to pin the target project root
-        project_path_arg = arguments.get("project_path")
-        if project_path_arg:
-            try:
-                project_structure = detect_springboot_project_structure(Path(project_path_arg))
-            except Exception:
-                project_structure = detect_springboot_project_structure()
-        else:
-            project_structure = detect_springboot_project_structure()
+        project_structure = _detect_project_structure(project_path)
         
         # 确定输出目录
         if project_structure["java_source_dir"] and project_structure["java_source_dir"].exists():
@@ -2150,7 +2149,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             resources_dir = project_structure["resources_dir"]
         else:
             # 如果仍然没有检测到，使用当前目录创建
-            current_dir = Path.cwd()
+            current_dir = Path(project_path).expanduser() if project_path else Path.cwd()
             java_source_dir = current_dir / "src" / "main" / "java"
             resources_dir = current_dir / "src" / "main" / "resources"
             java_source_dir.mkdir(parents=True, exist_ok=True)
@@ -2436,6 +2435,12 @@ def detect_springboot_project_structure(start_dir: Path = None) -> Dict[str, Pat
     return result
 
 
+def _detect_project_structure(project_path: Optional[str] = None) -> Dict[str, Path]:
+    """Resolve project structure from an explicit path or the current directory."""
+    start_dir = Path(project_path).expanduser() if project_path else None
+    return detect_springboot_project_structure(start_dir)
+
+
 def get_springboot_project_tools() -> List[Tool]:
     """
     Get SpringBoot project validation and environment check tools
@@ -2468,6 +2473,11 @@ def get_springboot_project_tools() -> List[Tool]:
                         "description": "Template category to check dependencies for",
                         "enum": template_categories,
                         "default": "MybatisPlus-Mixed"
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to project root (optional, defaults to current directory)",
+                        "default": "."
                     }
                 },
                 "required": []
@@ -2562,10 +2572,11 @@ async def handle_springboot_validate_project(arguments: Dict[str, Any]) -> List[
         check_dependencies = arguments.get("check_dependencies", True)
         create_missing_dirs = arguments.get("create_missing_dirs", True)
         template_category = arguments.get("template_category", "MybatisPlus-Mixed")
+        project_path = arguments.get("project_path")
         
         # 1. 检测项目结构
-        project_structure = detect_springboot_project_structure()
-        current_dir = Path.cwd()
+        project_structure = _detect_project_structure(project_path)
+        current_dir = Path(project_path).expanduser() if project_path else Path.cwd()
         
         validation_results = {
             "project_structure": {},
@@ -2598,7 +2609,7 @@ async def handle_springboot_validate_project(arguments: Dict[str, Any]) -> List[
                         validation_results["created_directories"].append(str(full_path))
                 
                 # 重新检测结构
-                project_structure = detect_springboot_project_structure()
+                project_structure = _detect_project_structure(project_path)
         
         # 检查关键目录
         required_dirs = {
@@ -2766,15 +2777,18 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         include_swagger = arguments.get("include_swagger", True)
         include_lombok = arguments.get("include_lombok", True)
         include_mapstruct = arguments.get("include_mapstruct", True)
-        project_path = arguments.get("project_path", ".")
+        requested_project_path = arguments.get("project_path")
+        project_path = requested_project_path or "."
         
         # 导入依赖管理器
         from ..utils.dependency_manager import DependencyManager
         
         # 检测项目结构
-        project_structure = detect_springboot_project_structure()
+        project_structure = _detect_project_structure(project_path)
         if project_structure["project_root"]:
             project_path = str(project_structure["project_root"])
+        elif requested_project_path:
+            project_path = str(Path(requested_project_path).expanduser())
         else:
             project_path = str(Path.cwd())
         
