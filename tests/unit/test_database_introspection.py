@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from dbjavagenix.core.exceptions import DatabaseAnalysisError
 from dbjavagenix.core.models import DatabaseConfig, DatabaseType
 from dbjavagenix.database.connection_manager import ConnectionManager
 from dbjavagenix.database.introspection import DatabaseIntrospector
@@ -123,6 +126,43 @@ class RecordingManager:
         if "pg_index" in query:
             return [{"key_name": "users_pkey", "column_name": "id", "is_unique": True}]
         return []
+
+
+class MySQLIndexManager:
+    def __init__(self):
+        self.config = DatabaseConfig(
+            type=DatabaseType.MYSQL,
+            host="db.example",
+            port=3306,
+            database="app",
+            username="reader",
+            password="secret",
+        )
+        self.calls = []
+
+    def get_connection_info(self, connection_id):
+        return self.config
+
+    def execute_query(self, connection_id, query, params=None):
+        self.calls.append((query, params))
+        return []
+
+
+def test_mysql_index_introspection_quotes_identifier():
+    manager = MySQLIndexManager()
+
+    DatabaseIntrospector(manager).get_indexes("mysql-1", "odd`table")
+
+    assert manager.calls == [("SHOW INDEX FROM `odd``table`", None)]
+
+
+def test_mysql_index_introspection_rejects_control_character():
+    manager = MySQLIndexManager()
+
+    with pytest.raises(DatabaseAnalysisError, match="control characters"):
+        DatabaseIntrospector(manager).get_indexes("mysql-1", "odd\ntable")
+
+    assert manager.calls == []
 
 
 def test_postgresql_introspection_uses_catalog_queries():
