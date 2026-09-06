@@ -616,9 +616,14 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
             """
         elif config.type == DatabaseType.SQLITE:
             # SQLite doesn't have multiple databases concept
+            response = {
+                "success": True,
+                "databases": [config.database],
+                "count": 1,
+            }
             return [TextContent(
                 type="text",
-                text=f"SQLite databases: [{config.database}]\n\nRaw Response: {{'databases': ['{config.database}']}}"
+                text=f"SQLite databases: [{config.database}]\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
             )]
         else:
             raise MCPServiceError(f"Listing databases not implemented for {config.type}")
@@ -643,7 +648,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
             type="text",
             text=f"Found {len(databases)} databases:\n" +
                  "\n".join(f"- {db}" for db in databases) +
-                 f"\n\nRaw Response: {response}"
+                 f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
         )]
         
     except (DatabaseConnectionError, DatabaseQueryError) as e:
@@ -747,7 +752,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
             text=f"Found {len(tables)} tables in database '{database}'" +
                  (f" schema '{schema}'" if schema else "") + ":\n" +
                  "\n".join(f"- {table}" for table in tables) +
-                 f"\n\nRaw Response: {response}"
+                 f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
         )]
         
     except (DatabaseConnectionError, DatabaseQueryError) as e:
