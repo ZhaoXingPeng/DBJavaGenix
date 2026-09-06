@@ -18,6 +18,7 @@ import pytest
 
 from dbjavagenix.database.atomic_codegen_tools import (
     _compute_file_path,
+    _collect_all_table_names,
     _extract_context,
     _normalize_tech_flags,
     _rebuild_package_paths,
@@ -30,12 +31,14 @@ from dbjavagenix.database.atomic_codegen_tools import (
     handle_codegen_build_context,
 )
 from dbjavagenix.core.models import ColumnInfo, TableInfo
+from dbjavagenix.core.models import DatabaseType
 from dbjavagenix.generator.template_context import TemplateContextBuilder
 
 
 # ============================================================
 # Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def simple_table():
@@ -66,27 +69,60 @@ def simple_table():
 
 def _build_context(table, category: str):
     """构建一个完整模板上下文用于 render_* 测试"""
-    ctx = TemplateContextBuilder(
-        author="tester", package_name="com.example.app"
-    ).build_context(table, category)
-    ctx.update({
-        "templateCategory": category,
-        "isDefault": category == "Default",
-        "isMybatisPlus": category == "MybatisPlus",
-        "isMybatisPlusMixed": category == "MybatisPlus-Mixed",
-        "isSb35Java21": category == "sb35-java21",
-        "useSwagger": True,
-        "useLombok": True,
-        "useMapStruct": False,
-    })
+    ctx = TemplateContextBuilder(author="tester", package_name="com.example.app").build_context(
+        table, category
+    )
+    ctx.update(
+        {
+            "templateCategory": category,
+            "isDefault": category == "Default",
+            "isMybatisPlus": category == "MybatisPlus",
+            "isMybatisPlusMixed": category == "MybatisPlus-Mixed",
+            "isSb35Java21": category == "sb35-java21",
+            "useSwagger": True,
+            "useLombok": True,
+            "useMapStruct": False,
+        }
+    )
     _rebuild_package_paths(ctx, "com.example.app")
     _normalize_tech_flags(ctx)
     return ctx
 
 
+class _TableNameCursor:
+    def __init__(self):
+        self.query = None
+
+    def execute(self, query):
+        self.query = query
+
+    def fetchall(self):
+        return [("users",), ("user_roles",)]
+
+    def close(self):
+        pass
+
+
+class _TableNameConnection:
+    def __init__(self):
+        self.cursor_instance = _TableNameCursor()
+
+    def cursor(self):
+        return self.cursor_instance
+
+
+class _TableNameManager:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def get_connection(self, _connection_id):
+        return self.connection
+
+
 # ============================================================
 # Tool 定义结构
 # ============================================================
+
 
 class TestToolDefinitions:
     def test_returns_six_tools(self):
@@ -124,9 +160,26 @@ class TestToolDefinitions:
                 assert "context" in t.inputSchema["required"]
 
 
+def test_collect_all_table_names_supports_postgresql(monkeypatch):
+    connection = _TableNameConnection()
+    monkeypatch.setattr(
+        "dbjavagenix.database.atomic_codegen_tools.connection_manager",
+        _TableNameManager(connection),
+    )
+
+    names = _collect_all_table_names(
+        "pg-1", type("Config", (), {"type": DatabaseType.POSTGRESQL})()
+    )
+
+    assert names == ["users", "user_roles"]
+    assert "information_schema.tables" in connection.cursor_instance.query
+    assert "pg_catalog" in connection.cursor_instance.query
+
+
 # ============================================================
 # 渲染逻辑
 # ============================================================
+
 
 class TestRenderEntity:
     def test_render_entity_sb35_java21(self, simple_table):
@@ -233,6 +286,7 @@ class TestRenderMapper:
 # 错误处理与辅助函数
 # ============================================================
 
+
 class TestErrorHandling:
     def test_build_context_rejects_unknown_category_before_connection_lookup(self):
         result = asyncio.run(
@@ -251,9 +305,7 @@ class TestErrorHandling:
 
     def test_render_rejects_unknown_category(self):
         result = asyncio.run(
-            handle_codegen_render_entity(
-                {"context": {"templateCategory": "UnknownCategory"}}
-            )
+            handle_codegen_render_entity({"context": {"templateCategory": "UnknownCategory"}})
         )
         payload = json.loads(result[0].text)
 

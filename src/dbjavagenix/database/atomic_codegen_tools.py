@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Tool 定义 - 6 个原子工具
 # ============================================================
 
+
 def get_atomic_codegen_tools() -> List[Tool]:
     """返回 P2.2 拆分后的 6 个原子代码生成工具"""
 
@@ -158,6 +159,7 @@ def get_atomic_codegen_tools() -> List[Tool]:
 # Handler 实现
 # ============================================================
 
+
 async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextContent]:
     """构建并返回完整模板上下文 dict(JSON 序列化在 TextContent.text)"""
     try:
@@ -179,9 +181,7 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
         supported_categories = TemplateConfigManager.get_supported_categories()
         if template_category not in supported_categories:
             supported = ", ".join(supported_categories)
-            raise MCPServiceError(
-                f"不支持的模板分类: {template_category!r}；支持分类: {supported}"
-            )
+            raise MCPServiceError(f"不支持的模板分类: {template_category!r}；支持分类: {supported}")
 
         config = connection_manager.get_connection_info(connection_id)
         if not config:
@@ -202,19 +202,21 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
         )
 
         context = analysis["template_context"]
-        context.update({
-            "author": author,
-            "packageName": package_name,
-            "hasPackageName": bool(package_name),
-            "templateCategory": template_category,
-            "isDefault": template_category == "Default",
-            "isMybatisPlus": template_category == "MybatisPlus",
-            "isMybatisPlusMixed": template_category == "MybatisPlus-Mixed",
-            "isSb35Java21": template_category == "sb35-java21",
-            "useSwagger": include_swagger,
-            "useLombok": include_lombok,
-            "useMapStruct": include_mapstruct,
-        })
+        context.update(
+            {
+                "author": author,
+                "packageName": package_name,
+                "hasPackageName": bool(package_name),
+                "templateCategory": template_category,
+                "isDefault": template_category == "Default",
+                "isMybatisPlus": template_category == "MybatisPlus",
+                "isMybatisPlusMixed": template_category == "MybatisPlus-Mixed",
+                "isSb35Java21": template_category == "sb35-java21",
+                "useSwagger": include_swagger,
+                "useLombok": include_lombok,
+                "useMapStruct": include_mapstruct,
+            }
+        )
 
         # 重写包路径(尊重 package_suffix)
         _rebuild_package_paths(context, package_name)
@@ -238,16 +240,22 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
 
     except (DatabaseConnectionError, MCPServiceError) as e:
-        return [TextContent(
-            type="text",
-            text=json.dumps({"error": str(e), "stage": "build_context"}, ensure_ascii=False),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps({"error": str(e), "stage": "build_context"}, ensure_ascii=False),
+            )
+        ]
     except Exception as e:  # noqa: BLE001
         logger.error(f"codegen_build_context unexpected error: {e}")
-        return [TextContent(
-            type="text",
-            text=json.dumps({"error": f"unexpected: {e}", "stage": "build_context"}, ensure_ascii=False),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {"error": f"unexpected: {e}", "stage": "build_context"}, ensure_ascii=False
+                ),
+            )
+        ]
 
 
 async def handle_codegen_render_entity(arguments: Dict[str, Any]) -> List[TextContent]:
@@ -291,18 +299,20 @@ async def handle_codegen_render_mapper(arguments: Dict[str, Any]) -> List[TextCo
         templates.append("mapstruct_mapper.mustache")
 
     if not templates:
-        return [TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "files": [],
-                    "language": "java",
-                    "note": f"template_category={category} 不需要 mapper 层(BaseMapper/JpaRepository 内置)",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "files": [],
+                        "language": "java",
+                        "note": f"template_category={category} 不需要 mapper 层(BaseMapper/JpaRepository 内置)",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+        ]
 
     return await _render_single_layer(arguments, templates)
 
@@ -310,6 +320,7 @@ async def handle_codegen_render_mapper(arguments: Dict[str, Any]) -> List[TextCo
 # ============================================================
 # 内部辅助
 # ============================================================
+
 
 def _extract_context(arguments: Dict[str, Any]) -> Any:
     """从 MCP arguments 中提取 context dict。容忍两种形态:
@@ -331,12 +342,12 @@ async def _render_single_layer(
     """渲染指定的模板文件列表,返回统一格式的 files"""
     context = _extract_context(arguments)
     if not isinstance(context, dict):
-        return [TextContent(
-            type="text",
-            text=json.dumps(
-                {"error": "context missing or not a dict"}, ensure_ascii=False
-            ),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps({"error": "context missing or not a dict"}, ensure_ascii=False),
+            )
+        ]
 
     category = context.get("templateCategory") or "MybatisPlus-Mixed"
 
@@ -344,18 +355,20 @@ async def _render_single_layer(
 
     supported_categories = TemplateConfigManager.get_supported_categories()
     if category not in supported_categories:
-        return [TextContent(
-            type="text",
-            text=json.dumps(
-                {
-                    "error": "unsupported template category",
-                    "template_category": category,
-                    "supported_categories": supported_categories,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": "unsupported template category",
+                        "template_category": category,
+                        "supported_categories": supported_categories,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+        ]
 
     from ..generator.mustache_engine import MustacheTemplateEngine
     from pathlib import Path
@@ -375,26 +388,32 @@ async def _render_single_layer(
             template_path = template_base / effective_category / tpl
 
         if not template_path.exists():
-            files.append({
-                "template_file": tpl,
-                "error": f"template not found: {template_path}",
-            })
+            files.append(
+                {
+                    "template_file": tpl,
+                    "error": f"template not found: {template_path}",
+                }
+            )
             continue
 
         try:
             code = engine.render_file(str(template_path), context)
             file_path = _compute_file_path(tpl, context, path_mapping)
-            files.append({
-                "template_file": tpl,
-                "file_path": file_path,
-                "code": code,
-                "lines": code.count("\n") + 1,
-            })
+            files.append(
+                {
+                    "template_file": tpl,
+                    "file_path": file_path,
+                    "code": code,
+                    "lines": code.count("\n") + 1,
+                }
+            )
         except Exception as e:  # noqa: BLE001
-            files.append({
-                "template_file": tpl,
-                "error": f"render failed: {e}",
-            })
+            files.append(
+                {
+                    "template_file": tpl,
+                    "error": f"render failed: {e}",
+                }
+            )
 
     # P3.3: 附加 code-diff MCP App meta (合并模板未渲染失败的项)
     from ..mcp_apps.code_diff import build_code_diff_data
@@ -428,8 +447,9 @@ def _compute_file_path(
         file_path = relative.format(**context)
     except KeyError:
         # context 缺字段时退化为基础路径
-        file_path = relative.replace("{packageSuffix}", context.get("packageSuffix", "")) \
-            .replace("{className}", context.get("className", "Unknown"))
+        file_path = relative.replace("{packageSuffix}", context.get("packageSuffix", "")).replace(
+            "{className}", context.get("className", "Unknown")
+        )
 
     package_name = context.get("package", "com.example")
     package_path = package_name.replace(".", "/")
@@ -449,8 +469,16 @@ def _collect_all_table_names(connection_id: str, config) -> List[str]:
                 return [row[0] for row in cursor.fetchall()]
             if config.type.name == "SQLITE":
                 cursor.execute(
-                    "SELECT name FROM sqlite_master "
-                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
+                return [row[0] for row in cursor.fetchall()]
+            if config.type.name == "POSTGRESQL":
+                cursor.execute(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_catalog = current_database() "
+                    "AND table_type = 'BASE TABLE' "
+                    "AND table_schema NOT IN ('pg_catalog', 'information_schema') "
+                    "ORDER BY table_schema, table_name"
                 )
                 return [row[0] for row in cursor.fetchall()]
             return []
@@ -469,20 +497,22 @@ def _rebuild_package_paths(context: Dict[str, Any], package_name: str) -> None:
     def with_suffix(kind: str) -> str:
         return f"{base_pkg}.{kind}.{suffix}" if suffix else f"{base_pkg}.{kind}"
 
-    context.update({
-        "package": base_pkg,
-        "packageName": base_pkg,
-        "basePackage": base_pkg,
-        "controllerPackage": with_suffix("controller"),
-        "servicePackage": with_suffix("service"),
-        "entityPackage": with_suffix("entity"),
-        "daoPackage": with_suffix("dao"),
-        "dtoPackage": with_suffix("dto"),
-        "voPackage": with_suffix("vo"),
-        "serviceImplPackage": (
-            f"{base_pkg}.service.impl.{suffix}" if suffix else f"{base_pkg}.service.impl"
-        ),
-    })
+    context.update(
+        {
+            "package": base_pkg,
+            "packageName": base_pkg,
+            "basePackage": base_pkg,
+            "controllerPackage": with_suffix("controller"),
+            "servicePackage": with_suffix("service"),
+            "entityPackage": with_suffix("entity"),
+            "daoPackage": with_suffix("dao"),
+            "dtoPackage": with_suffix("dto"),
+            "voPackage": with_suffix("vo"),
+            "serviceImplPackage": (
+                f"{base_pkg}.service.impl.{suffix}" if suffix else f"{base_pkg}.service.impl"
+            ),
+        }
+    )
 
 
 def _normalize_tech_flags(context: Dict[str, Any]) -> None:
