@@ -202,7 +202,7 @@ def test_list_tables_forwards_schema_filter(monkeypatch):
     monkeypatch.setattr(
         mod,
         "handle_db_query_tables",
-        lambda args: calls.update(args=args) or {"success": True, "tables": []},
+        lambda args: calls.update(args=args) or {"success": True, "tables": ["users"]},
     )
     monkeypatch.setattr(
         mod.connection_manager, "close_connection", lambda cid: calls.update(close=cid)
@@ -222,6 +222,18 @@ def test_extract_table_name_accepts_current_and_legacy_table_shapes():
     assert _extract_table_name({"name": "audit_log"}) == "audit_log"
     assert _extract_table_name({"table_name": ""}) is None
     assert _extract_table_name(42) is None
+
+
+def test_table_display_row_accepts_current_and_legacy_table_shapes():
+    from dbjavagenix.cli import _table_display_row
+
+    assert _table_display_row("users") == ("users", "", "")
+    assert _table_display_row({"table_name": "orders", "engine": "InnoDB", "comment": "订单"}) == (
+        "orders",
+        "InnoDB",
+        "订单",
+    )
+    assert _table_display_row(42) == ("", "", "")
 
 
 def test_codegen_result_succeeded_accepts_success_report():

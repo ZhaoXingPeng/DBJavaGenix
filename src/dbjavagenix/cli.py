@@ -53,6 +53,19 @@ def _extract_table_name(table: object) -> Optional[str]:
     return None
 
 
+def _table_display_row(table: object) -> tuple[str, str, str]:
+    """Return table name, engine, and comment for current or legacy responses."""
+    if isinstance(table, str):
+        return table, "", ""
+    if isinstance(table, dict):
+        return (
+            str(table.get("table_name") or table.get("name") or ""),
+            str(table.get("engine") or ""),
+            str(table.get("comment") or ""),
+        )
+    return "", "", ""
+
+
 def _codegen_result_succeeded(result: Optional[dict]) -> bool:
     """Accept structured success and the legacy adapter's success report text."""
     if not result:
@@ -357,11 +370,7 @@ def list_tables(
                     table.add_column("Comment", style="green")
 
                     for table_info in tables:
-                        table.add_row(
-                            table_info.get("table_name", ""),
-                            table_info.get("engine", ""),
-                            table_info.get("comment", ""),
-                        )
+                        table.add_row(*_table_display_row(table_info))
 
                     console.print(table)
                     console.print(f"[green]Found {len(tables)} tables[/green]")
