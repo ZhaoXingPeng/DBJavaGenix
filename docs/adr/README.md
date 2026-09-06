@@ -22,3 +22,6 @@
 - [ADR-011: Multi-dialect strategy](011-multi-dialect-strategy.md)
 - [ADR-012: Pin MCP SDK to the 1.x API contract](012-mcp-sdk-compatibility.md)
 - [ADR-013: Canonical MCP tool contract](013-canonical-mcp-tool-contract.md)
+
+### v0.3 (数据库元数据契约)
+- [ADR-014: 统一数据库元数据描述契约](014-metadata-introspection-contract.md)
