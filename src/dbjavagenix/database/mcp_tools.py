@@ -6,7 +6,7 @@ import logging
 import os
 import re
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Dict, Any, List, Optional
 
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
@@ -43,6 +43,31 @@ _READ_ONLY_FORBIDDEN_WORDS = {
     "TRUNCATE",
     "UPDATE",
 }
+
+
+def _resolve_codegen_output_path(base_dir: Path, relative_path: object) -> Path:
+    """Resolve a generated filename while keeping it inside its output directory."""
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("generated filename must be a non-empty string")
+
+    # Treat Windows separators consistently on every platform and reject rooted paths.
+    normalized_path = relative_path.replace("\\", "/")
+    windows_path = PureWindowsPath(relative_path)
+    if (
+        Path(normalized_path).is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.root
+        or windows_path.drive
+    ):
+        raise ValueError("generated filename must be relative")
+
+    resolved_base = base_dir.resolve()
+    resolved_output = (resolved_base / normalized_path).resolve()
+    try:
+        resolved_output.relative_to(resolved_base)
+    except ValueError as exc:
+        raise ValueError("generated filename escapes the output directory") from exc
+    return resolved_output
 
 
 def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
@@ -2108,23 +2133,48 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         for template_file, file_info in generated_files.items():
             if "error" not in file_info:
                 # 获取相对文件路径（包含包结构）
-                relative_path = file_info["filename"]
+                raw_relative_path = file_info.get("filename")
+                normalized_relative_path = (
+                    raw_relative_path.replace("\\", "/")
+                    if isinstance(raw_relative_path, str)
+                    else raw_relative_path
+                )
                 
                 # 判断文件类型并选择正确的输出目录
                 if (
-                    relative_path.endswith(('.xml', '.yml', '.yaml', '.properties'))
-                    or relative_path.startswith('resources/')
-                    or relative_path.startswith('mapper/')
-                    or '/mapper/' in relative_path
+                    isinstance(normalized_relative_path, str)
+                    and (
+                        normalized_relative_path.endswith(('.xml', '.yml', '.yaml', '.properties'))
+                        or normalized_relative_path.startswith('resources/')
+                        or normalized_relative_path.startswith('mapper/')
+                        or '/mapper/' in normalized_relative_path
+                    )
                 ):
                     # 资源文件放到resources目录
-                    if relative_path.startswith('resources/'):
-                        relative_path = relative_path[10:]  # 移除 'resources/' 前缀
-                    full_output_path = resources_dir / relative_path
-                    resource_files.append(str(full_output_path))
+                    if normalized_relative_path.startswith('resources/'):
+                        normalized_relative_path = normalized_relative_path[10:]
+                    output_dir = resources_dir
                 else:
                     # Java文件：路径已包含包结构，直接写入源码目录
-                    full_output_path = java_source_dir / relative_path
+                    output_dir = java_source_dir
+
+                try:
+                    full_output_path = _resolve_codegen_output_path(
+                        output_dir, normalized_relative_path
+                    )
+                except ValueError as path_error:
+                    file_info["write_error"] = f"Unsafe output path: {path_error}"
+                    logger.warning(
+                        "Rejected generated file path %r for %s: %s",
+                        raw_relative_path,
+                        output_dir,
+                        path_error,
+                    )
+                    continue
+
+                if output_dir == resources_dir:
+                    resource_files.append(str(full_output_path))
+                else:
                     written_files.append(str(full_output_path))
                 
                 # 确保父目录存在

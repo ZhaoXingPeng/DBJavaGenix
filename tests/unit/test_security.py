@@ -12,6 +12,32 @@ from dbjavagenix.database import mcp_tools
 from dbjavagenix.utils.security import redact_sensitive_data, redact_sensitive_text
 
 
+def test_codegen_output_path_stays_inside_base_directory(tmp_path):
+    base_dir = tmp_path / "src" / "main" / "java"
+
+    resolved = mcp_tools._resolve_codegen_output_path(base_dir, "com/example/Demo.java")
+
+    assert resolved == base_dir.resolve() / "com" / "example" / "Demo.java"
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "../outside.java",
+        "C:\\outside.java",
+        "C:outside.java",
+        "\\\\server\\share\\outside.java",
+    ],
+)
+def test_codegen_output_path_rejects_escape_and_rooted_paths(tmp_path, filename):
+    base_dir = tmp_path / "missing" / "java"
+
+    with pytest.raises(ValueError):
+        mcp_tools._resolve_codegen_output_path(base_dir, filename)
+
+    assert not base_dir.exists()
+
+
 def test_redact_sensitive_data_handles_nested_values_without_mutating_input():
     payload = {
         "username": "reader",
