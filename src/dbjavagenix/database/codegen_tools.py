@@ -8,7 +8,8 @@ from typing import Dict, List, Any, Optional
 from ..database.connection_manager import ConnectionManager
 from ..generator.java_generator import JavaCodeGenerator
 from ..generator.template_context import TemplateContextBuilder
-from ..core.models import TableInfo, ColumnInfo, GenerationConfig
+from ..core.models import TableInfo, ColumnInfo, DatabaseType, GenerationConfig
+from .introspection import DatabaseIntrospector
 
 
 class CodegenAnalyzer:
@@ -16,6 +17,7 @@ class CodegenAnalyzer:
     
     def __init__(self, connection_manager: ConnectionManager):
         self.connection_manager = connection_manager
+        self.introspector = DatabaseIntrospector(connection_manager)
     
     async def analyze_table_for_codegen(self, connection_id: str, table_name: str,
                                        all_table_names: Optional[List[str]] = None,
@@ -24,29 +26,42 @@ class CodegenAnalyzer:
         """分析单个表的结构，返回代码生成所需的完整信息"""
         
         # 获取表基本信息
-        table_info = await self._get_table_info(connection_id, table_name)
+        config = self.introspector.get_config(connection_id)
+        table_info = self.introspector.get_table(connection_id, table_name)
         
         # 获取列信息
-        columns = await self._get_columns_info(connection_id, table_name)
+        columns = self.introspector.get_columns(connection_id, table_name)
         
         # 获取主键信息
-        primary_keys = await self._get_primary_keys(connection_id, table_name)
+        primary_keys = self.introspector.get_primary_keys(connection_id, table_name)
+        primary_key_set = set(primary_keys)
+        for column in columns:
+            column["primary_key"] = column.get("primary_key", False) or column["name"] in primary_key_set
         
         # 获取外键信息
-        foreign_keys = await self._get_foreign_keys(connection_id, table_name)
+        foreign_keys = self.introspector.get_foreign_keys(connection_id, table_name)
         
         # 获取索引信息
-        indexes = await self._get_indexes(connection_id, table_name)
+        indexes = self.introspector.get_indexes(connection_id, table_name)
         
         # 获取数据库名称
-        connection = self.connection_manager.get_connection(connection_id)
-        database_name = connection.db.decode('utf-8') if hasattr(connection, 'db') and connection.db else "unknown"
+        database_name = config.database or table_info.get("schema") or "unknown"
         
         # 构建 TableInfo 对象
-        table_obj = self._build_table_info(table_info, columns, primary_keys, foreign_keys, indexes, database_name)
+        table_obj = self._build_table_info(
+            table_info,
+            columns,
+            primary_keys,
+            foreign_keys,
+            indexes,
+            database_name,
+            config.type,
+        )
         
         # 构建代码生成上下文
-        context_builder = TemplateContextBuilder(author="ZXP", package_name="com.example")
+        context_builder = TemplateContextBuilder(
+            author="ZXP", package_name="com.example", database_type=config.type
+        )
         context = context_builder.build_context(
             table_obj,
             template_category=template_category,
@@ -59,11 +74,12 @@ class CodegenAnalyzer:
             "table_info": {
                 "name": table_obj.name,
                 "comment": table_obj.comment,
+                "schema": table_obj.schema,
                 "columns": [self._column_to_dict(col) for col in table_obj.columns]
             },
             "template_context": context,
-            "java_types": self._extract_java_types(table_obj.columns),
-            "imports_needed": self._calculate_imports_needed(table_obj.columns),
+            "java_types": self._extract_java_types(table_obj.columns, config.type),
+            "imports_needed": self._calculate_imports_needed(table_obj.columns, config.type),
             "relationships": {
                 "primary_keys": primary_keys,
                 "foreign_keys": foreign_keys,
@@ -75,12 +91,27 @@ class CodegenAnalyzer:
         """分析整个数据库，返回所有表的代码生成信息"""
         
         # 获取所有表
-        connection = self.connection_manager.get_connection(connection_id)
-        cursor = connection.cursor()
-        
-        try:
-            cursor.execute("SHOW TABLES")
-            all_tables = [row[0] for row in cursor.fetchall()]
+        all_tables = self.introspector.list_tables(connection_id)
+
+        tables_to_analyze = [t for t in all_tables if not table_filter or t in table_filter]
+        analysis_results = {}
+        for name in tables_to_analyze:
+            try:
+                analysis_results[name] = await self.analyze_table_for_codegen(connection_id, name)
+            except Exception as exc:
+                analysis_results[name] = {"error": str(exc)}
+
+        return {
+            "database_info": {
+                "total_tables": len(all_tables),
+                "analyzed_tables": len(tables_to_analyze),
+                "success_count": sum("error" not in item for item in analysis_results.values()),
+                "error_count": sum("error" in item for item in analysis_results.values()),
+            },
+            "tables": analysis_results,
+        }
+
+        if False:
             
             # 应用表过滤器
             if table_filter:
@@ -107,9 +138,6 @@ class CodegenAnalyzer:
                 "tables": analysis_results
             }
             
-        finally:
-            cursor.close()
-    
     async def _get_table_info(self, connection_id: str, table_name: str) -> Dict[str, Any]:
         """获取表基本信息"""
         connection = self.connection_manager.get_connection(connection_id)
@@ -254,9 +282,16 @@ class CodegenAnalyzer:
         finally:
             cursor.close()
     
-    def _build_table_info(self, table_info: Dict[str, Any], columns: List[Dict[str, Any]], 
-                         primary_keys: List[str], foreign_keys: List[Dict[str, Any]], 
-                         indexes: List[Dict[str, Any]], database_name: str = "unknown") -> TableInfo:
+    def _build_table_info(
+        self,
+        table_info: Dict[str, Any],
+        columns: List[Dict[str, Any]],
+        primary_keys: List[str],
+        foreign_keys: List[Dict[str, Any]],
+        indexes: List[Dict[str, Any]],
+        database_name: str = "unknown",
+        database_type: DatabaseType = DatabaseType.MYSQL,
+    ) -> TableInfo:
         """构建 TableInfo 对象"""
         
         column_objects = []
@@ -264,7 +299,7 @@ class CodegenAnalyzer:
             column_obj = ColumnInfo(
                 name=col["name"],
                 data_type=col["type"],
-                java_type=self._map_java_type(col["type"]),
+                java_type=self._map_java_type(col["type"], database_type),
                 nullable=col["nullable"],
                 primary_key=col["primary_key"],
                 default_value=col["default_value"],
@@ -273,13 +308,24 @@ class CodegenAnalyzer:
             # 添加额外属性
             column_obj.auto_increment = col["auto_increment"]
             column_obj.max_length = col["max_length"]
+            column_obj.precision = col.get("precision")
+            column_obj.scale = col.get("scale")
             column_objects.append(column_obj)
         
         table_obj = TableInfo(
             name=table_info["name"],
             schema=database_name,
             comment=table_info["comment"],
-            columns=column_objects
+            columns=column_objects,
+            primary_keys=list(primary_keys),
+            foreign_keys={
+                item["column_name"]: (
+                    f"{item['referenced_table']}.{item['referenced_column']}"
+                )
+                for item in foreign_keys
+                if item.get("column_name")
+            },
+            indexes=[item["key_name"] for item in indexes if item.get("key_name")],
         )
         
         return table_obj
@@ -294,12 +340,17 @@ class CodegenAnalyzer:
             "default_value": column.default_value,
             "comment": column.comment,
             "auto_increment": getattr(column, 'auto_increment', False),
-            "max_length": getattr(column, 'max_length', None)
+            "max_length": getattr(column, 'max_length', None),
+            "precision": getattr(column, "precision", None),
+            "scale": getattr(column, "scale", None),
+            "java_type": column.java_type,
         }
     
-    def _extract_java_types(self, columns: List[ColumnInfo]) -> List[str]:
+    def _extract_java_types(
+        self, columns: List[ColumnInfo], database_type: DatabaseType = DatabaseType.MYSQL
+    ) -> List[str]:
         """提取所需的 Java 类型列表"""
-        context_builder = TemplateContextBuilder()
+        context_builder = TemplateContextBuilder(database_type=database_type)
         java_types = set()
         
         for column in columns:
@@ -308,9 +359,11 @@ class CodegenAnalyzer:
         
         return sorted(list(java_types))
     
-    def _calculate_imports_needed(self, columns: List[ColumnInfo]) -> List[str]:
+    def _calculate_imports_needed(
+        self, columns: List[ColumnInfo], database_type: DatabaseType = DatabaseType.MYSQL
+    ) -> List[str]:
         """计算需要导入的类列表"""
-        context_builder = TemplateContextBuilder()
+        context_builder = TemplateContextBuilder(database_type=database_type)
         imports = set()
         
         for column in columns:
@@ -328,11 +381,13 @@ class CodegenAnalyzer:
         
         return sorted(list(imports))
     
-    def _map_java_type(self, mysql_type: str) -> str:
+    def _map_java_type(
+        self, database_type_name: str, database_type: DatabaseType = DatabaseType.MYSQL
+    ) -> str:
         """将 MySQL 数据类型映射为 Java 类型"""
         from ..generator.template_context import TemplateContextBuilder
-        context_builder = TemplateContextBuilder()
-        return context_builder._map_java_type(mysql_type)
+        context_builder = TemplateContextBuilder(database_type=database_type)
+        return context_builder._map_java_type(database_type_name)
 
 
 class CodegenGenerator:

@@ -4,7 +4,7 @@ Provides database analysis and Java code generation capabilities through MCP too
 """
 import asyncio
 import logging
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
@@ -73,6 +73,55 @@ logger = logging.getLogger(__name__)
 server = Server("dbjavagenix")
 
 
+ToolFactory = Callable[[], list[Tool]]
+
+_TOOL_FACTORIES: tuple[ToolFactory, ...] = (
+    get_connection_tools,
+    get_table_analysis_tools,
+    get_codegen_tools,
+    get_atomic_codegen_tools,
+    get_springboot_project_tools,
+    get_visualization_tools,
+    get_ai_tools,
+    get_observability_tools,
+    get_discovery_tools,
+)
+
+
+def _all_tools() -> list[Tool]:
+    """Build the canonical tool list used by both listing and dispatch."""
+    tools: list[Tool] = []
+    names: set[str] = set()
+    for factory in _TOOL_FACTORIES:
+        for tool in factory():
+            if tool.name in names:
+                raise RuntimeError(f"Duplicate MCP tool name: {tool.name}")
+            names.add(tool.name)
+            tools.append(tool)
+    return tools
+
+
+def _tool_handlers(tools: list[Tool] | None = None) -> dict[str, Callable[..., Any]]:
+    """Resolve handlers from the canonical tool names.
+
+    The project convention is ``<tool name>`` -> ``handle_<tool name>``. Keeping
+    this lookup derived from the tool list prevents list/dispatch drift when a
+    new tool is added.
+    """
+    handlers: dict[str, Callable[..., Any]] = {}
+    missing: list[str] = []
+    for tool in tools if tools is not None else _all_tools():
+        name = tool.name
+        handler = globals().get(f"handle_{name}")
+        if callable(handler):
+            handlers[name] = handler
+        else:
+            missing.append(name)
+    if missing:
+        raise RuntimeError(f"Missing MCP handlers: {', '.join(sorted(missing))}")
+    return handlers
+
+
 @server.list_tools()
 async def handle_list_tools() -> list[Tool]:
     """
@@ -81,34 +130,8 @@ async def handle_list_tools() -> list[Tool]:
     Returns:
         List of available tools
     """
-    tools = []
-    
-    # Add database connection and query tools
-    tools.extend(get_connection_tools())
-    
-    # Add table structure analysis tools
-    tools.extend(get_table_analysis_tools())
-    
-    # Add code generation tools (legacy: db_codegen_analyze + db_codegen_generate)
-    tools.extend(get_codegen_tools())
-
-    # Add atomic code generation tools (P2.2: build_context + 5 render_* layers)
-    tools.extend(get_atomic_codegen_tools())
-
-    # Add SpringBoot project validation tools
-    tools.extend(get_springboot_project_tools())
-
-    # Add visualization tools (P3.1: ER diagram via mcp-apps)
-    tools.extend(get_visualization_tools())
-
-    # Add AI semantic tools (P4: naming inference, template recommendation, schema summary)
-    tools.extend(get_ai_tools())
-
-    # Add observability tools (P5: server_metrics, server_health)
-    tools.extend(get_observability_tools())
-
-    # Add discovery tools (P2.3: search_tools for progressive disclosure)
-    tools.extend(get_discovery_tools())
+    tools = _all_tools()
+    _tool_handlers(tools)
 
     # Apply progressive-mode filter (env DBJAVAGENIX_PROGRESSIVE=1)
     visible_tools = filter_tools_for_listing(tools)
@@ -138,87 +161,10 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
     _start_perf = _time_for_metrics.perf_counter()
     _is_error = False
     try:
-        # Database connection and query tools
-        if name == "db_connect_test":
-            return await handle_db_connect_test(arguments)
-        elif name == "db_query_databases":
-            return await handle_db_query_databases(arguments)
-        elif name == "db_query_tables":
-            return await handle_db_query_tables(arguments)
-        elif name == "db_query_table_exists":
-            return await handle_db_query_table_exists(arguments)
-        elif name == "db_query_execute":
-            return await handle_db_query_execute(arguments)
-        
-        # Table structure analysis tools
-        elif name == "db_table_describe":
-            return await handle_db_table_describe(arguments)
-        elif name == "db_table_columns":
-            return await handle_db_table_columns(arguments)
-        elif name == "db_table_primary_keys":
-            return await handle_db_table_primary_keys(arguments)
-        elif name == "db_table_foreign_keys":
-            return await handle_db_table_foreign_keys(arguments)
-        elif name == "db_table_indexes":
-            return await handle_db_table_indexes(arguments)
-        
-        # Code generation tools (legacy single-shot)
-        elif name == "db_codegen_analyze":
-            return await handle_db_codegen_analyze(arguments)
-        elif name == "db_codegen_generate":
-            return await handle_db_codegen_generate(arguments)
-
-        # Atomic code generation tools (P2.2)
-        elif name == "codegen_build_context":
-            return await handle_codegen_build_context(arguments)
-        elif name == "codegen_render_entity":
-            return await handle_codegen_render_entity(arguments)
-        elif name == "codegen_render_dao":
-            return await handle_codegen_render_dao(arguments)
-        elif name == "codegen_render_service":
-            return await handle_codegen_render_service(arguments)
-        elif name == "codegen_render_controller":
-            return await handle_codegen_render_controller(arguments)
-        elif name == "codegen_render_mapper":
-            return await handle_codegen_render_mapper(arguments)
-        
-        # (deprecated/removed) java_check_dependencies was never implemented here;
-        # dependency analysis is covered by springboot_* tools.
-            
-        # SpringBoot project validation tools
-        elif name == "springboot_validate_project":
-            return await handle_springboot_validate_project(arguments)
-        elif name == "springboot_analyze_dependencies":
-            return await handle_springboot_analyze_dependencies(arguments)
-        elif name == "springboot_read_config":
-            return await handle_springboot_read_config(arguments)
-
-        # Visualization tools (P3.1: MCP Apps)
-        elif name == "db_render_er_diagram":
-            return await handle_db_render_er_diagram(arguments)
-
-        # AI semantic tools (P4)
-        elif name == "ai_infer_business_names":
-            return await handle_ai_infer_business_names(arguments)
-        elif name == "ai_recommend_template":
-            return await handle_ai_recommend_template(arguments)
-        elif name == "ai_summarize_schema":
-            return await handle_ai_summarize_schema(arguments)
-        elif name == "ai_metrics":
-            return await handle_ai_metrics(arguments)
-
-        # Observability tools (P5)
-        elif name == "server_metrics":
-            return await handle_server_metrics(arguments)
-        elif name == "server_health":
-            return await handle_server_health(arguments)
-
-        # Discovery meta-tool (P2.3)
-        elif name == "search_tools":
-            return await handle_search_tools(arguments)
-
-        else:
+        handler = _tool_handlers().get(name)
+        if handler is None:
             raise ValueError(f"Unknown tool: {name}")
+        return await handler(arguments)
             
     except Exception as e:
         _is_error = True

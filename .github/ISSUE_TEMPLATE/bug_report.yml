@@ -1,6 +1,6 @@
 name: Bug report
-description: Report a reproducible problem
-title: ":bug: fix: "
+description: 提交可复现的问题
+title: ":bug: fix: 请填写问题摘要"
 labels: ["bug", "triage"]
 body:
   - type: markdown
@@ -18,28 +18,28 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem and expected behavior
+      label: 问题与预期行为
       description: 描述实际行为、预期行为和业务影响。
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Reproduction
+      label: 复现步骤
       description: 提供最小复现步骤、输入和完整错误信息（请脱敏）。
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: Environment
+      label: 环境信息
       description: Python、操作系统、数据库、安装方式和相关配置。
     validations:
       required: true
   - type: checkboxes
     id: checks
     attributes:
-      label: Preflight
+      label: 提交前检查
       options:
         - label: 我已搜索现有 Issue，确认没有重复报告。
           required: true

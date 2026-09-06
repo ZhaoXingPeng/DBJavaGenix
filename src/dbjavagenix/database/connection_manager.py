@@ -48,6 +48,23 @@ class ConnectionManager:
                     autocommit=True,
                     connect_timeout=10
                 )
+            elif config.type == DatabaseType.POSTGRESQL:
+                try:
+                    import psycopg2
+                except ImportError as exc:
+                    raise DatabaseConnectionError(
+                        "PostgreSQL support requires the psycopg2-binary dependency"
+                    ) from exc
+
+                connection = psycopg2.connect(
+                    host=config.host,
+                    port=config.port,
+                    user=config.username,
+                    password=config.password,
+                    dbname=config.database,
+                    connect_timeout=10,
+                )
+                connection.autocommit = True
             elif config.type == DatabaseType.SQLITE:
                 connection = sqlite3.connect(config.database)
                 connection.row_factory = sqlite3.Row  # Enable dict-like access
@@ -87,6 +104,8 @@ class ConnectionManager:
         
         # Test connection is still alive
         try:
+            if getattr(connection, "closed", 0):
+                raise DatabaseConnectionError("connection is closed")
             if hasattr(connection, 'ping'):
                 connection.ping(reconnect=True)
         except Exception as e:
@@ -112,8 +131,8 @@ class ConnectionManager:
         try:
             connection = self.connections[connection_id]
             connection.close()
-            del self.connections[connection_id]
-            del self.connection_configs[connection_id]
+            self.connections.pop(connection_id, None)
+            self.connection_configs.pop(connection_id, None)
             logger.info(f"Closed connection {connection_id}")
             return True
         except Exception as e:
@@ -133,7 +152,8 @@ class ConnectionManager:
         Returns:
             Database configuration or None if not found
         """
-        return self.connection_configs.get(connection_id)
+        config = self.connection_configs.get(connection_id)
+        return config.model_copy(deep=True) if config else None
     
     def list_connections(self) -> Dict[str, Dict[str, Any]]:
         """

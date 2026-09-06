@@ -5,7 +5,7 @@
 
 import pytest
 
-from dbjavagenix.core.models import ColumnInfo, TableInfo
+from dbjavagenix.core.models import ColumnInfo, DatabaseType, TableInfo
 from dbjavagenix.generator.template_context import (
     TemplateConfigManager,
     TemplateContextBuilder,
@@ -108,6 +108,16 @@ class TestJavaTypeMapping:
     def test_unknown_falls_back_to_string(self, builder):
         assert builder._map_java_type("UNKNOWN_FANCY_TYPE") == "String"
 
+    def test_postgresql_dialect_is_used_for_context_mapping(self):
+        builder = TemplateContextBuilder(
+            author="tester",
+            package_name="com.example.app",
+            database_type=DatabaseType.POSTGRESQL,
+        )
+        assert builder._map_java_type("TIMESTAMP WITH TIME ZONE") == "OffsetDateTime"
+        assert builder._map_java_type("BYTEA") == "byte[]"
+        assert builder._map_java_type("JSONB") == "String"
+
 
 class TestJdbcTypeMapping:
     @pytest.mark.parametrize(
@@ -126,6 +136,12 @@ class TestJdbcTypeMapping:
 
     def test_unknown_falls_back_to_varchar(self, builder):
         assert builder._map_jdbc_type("UNKNOWN_TYPE") == "VARCHAR"
+
+    def test_postgresql_jdbc_types_are_preserved(self):
+        builder = TemplateContextBuilder(database_type="postgresql")
+        assert builder._map_jdbc_type("TIMESTAMPTZ") == "TIMESTAMP_WITH_TIMEZONE"
+        assert builder._map_jdbc_type("BYTEA") == "BINARY"
+        assert builder._map_jdbc_type("JSONB") == "OTHER"
 
 
 class TestStringTypeDetection:
@@ -185,6 +201,25 @@ class TestBuildContextStructure:
         assert "jdbcType" in first
         assert "isPrimaryKey" in first
         assert "isLast" in first
+
+    def test_postgresql_context_includes_dialect_imports(self):
+        table = TableInfo(
+            name="audit_event",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="occurred_at",
+                    data_type="TIMESTAMPTZ",
+                    java_type="OffsetDateTime",
+                ),
+                ColumnInfo(name="event_id", data_type="UUID", java_type="String"),
+            ],
+        )
+        builder = TemplateContextBuilder(database_type="postgresql")
+        context = builder.build_context(table)
+        assert context["columns"][0]["javaType"] == "OffsetDateTime"
+        assert context["columns"][1]["javaType"] == "String"
+        assert "java.time.OffsetDateTime" in context["imports"]
 
     def test_last_flag(self, builder, rbac_user_table):
         ctx = builder.build_context(rbac_user_table, "Default")
