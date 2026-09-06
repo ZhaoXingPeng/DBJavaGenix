@@ -20,6 +20,25 @@ async def test_every_listed_tool_has_a_handler():
 
 
 @pytest.mark.asyncio
+async def test_schema_algorithm_tools_are_listed_and_dispatchable():
+    tools = await mcp_server.handle_list_tools()
+    names = {tool.name for tool in tools}
+
+    assert {
+        "schema_topo_order",
+        "schema_cluster_tables",
+        "schema_check_cycles",
+    } <= names
+
+    result = await mcp_server.handle_call_tool(
+        "schema_topo_order",
+        {"tables": ["parent", "child"], "fks": [["child", "parent"]]},
+    )
+    payload = json.loads(result[0].text)
+    assert payload["order"] == ["parent", "child"]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_resolves_handler_from_canonical_name(monkeypatch):
     calls = []
 
