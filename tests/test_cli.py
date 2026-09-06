@@ -202,6 +202,30 @@ def test_query_tables_wrapper_parses_json_response(monkeypatch):
     assert result["tables"] == ["users"]
 
 
+def test_spring_config_wrapper_parses_json_response(monkeypatch):
+    from dbjavagenix import cli_helpers
+    from mcp.types import TextContent
+
+    async def fake_read_config(_arguments):
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Spring Boot Project Configuration\n\n"
+                    'Raw Response: {"success": true, "project_root": "demo", '
+                    '"effective": {"spring": {"application": {"name": "demo"}}}}'
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(cli_helpers, "async_handle_springboot_read_config", fake_read_config)
+
+    result = cli_helpers.handle_springboot_read_config({"project_path": "demo"})
+
+    assert result["success"] is True
+    assert result["project_root"] == "demo"
+
+
 def test_list_tables_forwards_schema_filter(monkeypatch):
     mod = importlib.import_module("dbjavagenix.cli")
     calls = {}

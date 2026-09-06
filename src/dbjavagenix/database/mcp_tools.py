@@ -3157,7 +3157,8 @@ async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextC
 
         return [TextContent(
             type="text",
-            text='\n'.join(text_lines) + f"\n\nRaw Response: {response}"
+            text='\n'.join(text_lines)
+            + f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
         )]
 
     except Exception as e:
@@ -3168,6 +3169,6 @@ async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextC
         }
         return [TextContent(
             type="text",
-            text=f"Failed to read Spring Boot config: {e}\n\nRaw Response: {err}"
+            text=f"Failed to read Spring Boot config: {e}\n\nRaw Response: {json.dumps(err, ensure_ascii=False)}"
         )]
 

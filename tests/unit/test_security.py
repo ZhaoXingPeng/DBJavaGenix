@@ -1,5 +1,6 @@
 """Regression tests for secret redaction at logging and MCP response boundaries."""
 
+import json
 import logging
 
 import pytest
@@ -139,7 +140,8 @@ async def test_spring_config_response_redacts_credentials(tmp_path, monkeypatch)
 
     assert "db-secret" not in text
     assert "llm-secret" not in text
-    assert "'password': '***'" in text
-    assert "'api-token': '***'" in text
+    payload = json.loads(text.split("Raw Response:", 1)[1].strip())
+    assert payload["effective"]["spring"]["datasource"]["password"] == "***"
+    assert payload["raw_config"]["custom"]["api-token"] == "***"
     assert "reader:***@db/demo" in text
     assert "name=demo" in text
