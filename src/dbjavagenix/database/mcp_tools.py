@@ -1667,6 +1667,9 @@ def get_codegen_tools() -> List[Tool]:
     Returns:
         List of code generation MCP Tool objects
     """
+    from ..generator.template_context import TemplateConfigManager
+
+    template_categories = TemplateConfigManager.get_supported_categories()
     return [
         Tool(
             name="db_codegen_analyze",
@@ -1689,7 +1692,7 @@ def get_codegen_tools() -> List[Tool]:
                     "template_category": {
                         "type": "string",
                         "description": "Template category to use for context building",
-                        "enum": ["Default", "MybatisPlus", "MybatisPlus-Mixed"],
+                        "enum": template_categories,
                         "default": "MybatisPlus-Mixed"
                     },
                     "author": {
@@ -1737,7 +1740,7 @@ def get_codegen_tools() -> List[Tool]:
                     "template_category": {
                         "type": "string",
                         "description": "Template category to use for code generation",
-                        "enum": ["Default", "MybatisPlus", "MybatisPlus-Mixed"],
+                        "enum": template_categories,
                         "default": "MybatisPlus-Mixed"
                     },
                     "author": {
@@ -1828,6 +1831,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
             "isDefault": template_category == "Default",
             "isMybatisPlus": template_category == "MybatisPlus",
             "isMybatisPlusMixed": template_category == "MybatisPlus-Mixed",
+            "isSb35Java21": template_category == "sb35-java21",
         })
         
         # Format response text
@@ -2048,6 +2052,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             "hasPackageName": bool(package_name),
             "templateCategory": template_category,
             "isDefault": template_category == "Default",
+            "isSb35Java21": template_category == "sb35-java21",
             "isMybatisPlus": template_category == "MybatisPlus",
             "isMybatisPlusMixed": template_category == "MybatisPlus-Mixed",
             "useSwagger": include_swagger,
@@ -2413,6 +2418,9 @@ def get_springboot_project_tools() -> List[Tool]:
     Returns:
         List of SpringBoot project MCP Tool objects
     """
+    from ..generator.template_context import TemplateConfigManager
+
+    template_categories = TemplateConfigManager.get_supported_categories()
     return [
         Tool(
             name="springboot_validate_project",
@@ -2433,7 +2441,7 @@ def get_springboot_project_tools() -> List[Tool]:
                     "template_category": {
                         "type": "string",
                         "description": "Template category to check dependencies for",
-                        "enum": ["Default", "MybatisPlus", "MybatisPlus-Mixed"],
+                        "enum": template_categories,
                         "default": "MybatisPlus-Mixed"
                     }
                 },
@@ -2449,7 +2457,7 @@ def get_springboot_project_tools() -> List[Tool]:
                     "template_category": {
                         "type": "string",
                         "description": "Template category for dependency analysis",
-                        "enum": ["Default", "MybatisPlus", "MybatisPlus-Mixed"],
+                        "enum": template_categories,
                         "default": "MybatisPlus-Mixed"
                     },
                     "database_type": {

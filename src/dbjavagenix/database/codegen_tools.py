@@ -239,6 +239,15 @@ class CodegenGenerator:
     ) -> Dict[str, Any]:
         """根据分析结果生成代码"""
 
+        from ..generator.template_context import TemplateConfigManager
+
+        supported_categories = TemplateConfigManager.get_supported_categories()
+        if template_category not in supported_categories:
+            supported = ", ".join(supported_categories)
+            raise ValueError(
+                f"不支持的模板分类: {template_category!r}；支持分类: {supported}"
+            )
+
         # 构建生成配置
         config = GenerationConfig(
             output_dir=generation_config.get("output_dir", "/tmp/generated")
@@ -279,8 +288,6 @@ class CodegenGenerator:
         generated_code = {}
 
         # 获取模板文件列表
-        from ..generator.template_context import TemplateConfigManager
-
         template_config = TemplateConfigManager()
         base_templates = template_config.get_template_files(template_category)
         template_files = list(base_templates)

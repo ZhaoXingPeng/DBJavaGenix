@@ -6,6 +6,10 @@
 import pytest
 
 from dbjavagenix.core.models import ColumnInfo, DatabaseType, TableInfo
+from dbjavagenix.database.mcp_tools import (
+    get_codegen_tools,
+    get_springboot_project_tools,
+)
 from dbjavagenix.generator.template_context import (
     TemplateConfigManager,
     TemplateContextBuilder,
@@ -250,6 +254,33 @@ class TestBuildContextStructure:
 
 
 class TestTemplateConfigManager:
+    def test_supported_categories_are_canonical_and_ordered(self):
+        assert TemplateConfigManager.get_supported_categories() == [
+            "Default",
+            "MybatisPlus",
+            "MybatisPlus-Mixed",
+            "sb35-java21",
+        ]
+
+    def test_template_file_lists_are_copied(self):
+        files = TemplateConfigManager.get_template_files("Default")
+        files.clear()
+
+        assert "entity.mustache" in TemplateConfigManager.get_template_files("Default")
+
+    def test_public_tool_schemas_use_canonical_categories(self):
+        expected = TemplateConfigManager.get_supported_categories()
+        tools = get_codegen_tools() + get_springboot_project_tools()
+
+        category_enums = [
+            tool.inputSchema["properties"]["template_category"]["enum"]
+            for tool in tools
+            if "template_category" in tool.inputSchema.get("properties", {})
+        ]
+
+        assert category_enums
+        assert all(categories == expected for categories in category_enums)
+
     def test_default_files(self):
         files = TemplateConfigManager.get_template_files("Default")
         assert "entity.mustache" in files
