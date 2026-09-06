@@ -13,6 +13,7 @@ from mcp.types import TextContent, Tool
 from ..core.exceptions import DatabaseConnectionError, MCPServiceError
 from ..core.models import DatabaseType
 from ..database.connection_manager import connection_manager
+from ..database.introspection import DatabaseIntrospector
 from ..mcp_apps.er_diagram import (
     ERColumn,
     ERForeignKey,
@@ -222,3 +223,39 @@ def _query_foreign_keys(
             for r in rows
         ]
     return []
+
+
+def _query_columns(
+    connection_id: str, database: str, table: str, db_type: DatabaseType
+) -> List[Dict[str, Any]]:
+    """Return normalized columns through the shared introspection layer."""
+    introspector = DatabaseIntrospector(connection_manager)
+    config = introspector.get_config(connection_id)
+    if config.type != db_type:
+        raise MCPServiceError(f"Connection type mismatch: expected {db_type}, got {config.type}")
+    return [
+        {
+            "name": column["name"],
+            "type": column["column_type"] or column["type"],
+            "is_primary": column["primary_key"],
+        }
+        for column in introspector.get_columns(connection_id, table)
+    ]
+
+
+def _query_foreign_keys(
+    connection_id: str, database: str, table: str, db_type: DatabaseType
+) -> List[Dict[str, Any]]:
+    """Return normalized foreign keys through the shared introspection layer."""
+    introspector = DatabaseIntrospector(connection_manager)
+    config = introspector.get_config(connection_id)
+    if config.type != db_type:
+        raise MCPServiceError(f"Connection type mismatch: expected {db_type}, got {config.type}")
+    return [
+        {
+            "column": foreign_key["column_name"],
+            "to_table": foreign_key["referenced_table"],
+            "to_column": foreign_key["referenced_column"],
+        }
+        for foreign_key in introspector.get_foreign_keys(connection_id, table)
+    ]
