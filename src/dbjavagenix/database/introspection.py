@@ -305,30 +305,41 @@ class DatabaseIntrospector:
                 (config.database, table_name),
             )
         elif config.type == DatabaseType.POSTGRESQL:
-            schema_filter = "AND tc.table_schema = %s" if schema else ""
+            schema_filter = "AND src_ns.nspname = %s" if schema else ""
             params = (table_name, schema) if schema else (table_name,)
             rows = self.connection_manager.execute_query(
                 connection_id,
                 f"""
-                SELECT tc.constraint_name, kcu.column_name,
-                       ccu.table_name AS referenced_table_name,
-                       ccu.column_name AS referenced_column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu
-                  ON tc.constraint_catalog = kcu.constraint_catalog
-                 AND tc.constraint_schema = kcu.constraint_schema
-                 AND tc.constraint_name = kcu.constraint_name
-                 AND tc.table_name = kcu.table_name
-                JOIN information_schema.constraint_column_usage ccu
-                  ON tc.constraint_catalog = ccu.constraint_catalog
-                 AND tc.constraint_schema = ccu.constraint_schema
-                 AND tc.constraint_name = ccu.constraint_name
-                WHERE tc.table_catalog = current_database()
-                  AND tc.constraint_type = 'FOREIGN KEY'
-                  AND tc.table_schema NOT IN ('pg_catalog', 'information_schema')
-                  AND tc.table_name = %s
+                SELECT con.conname AS constraint_name,
+                       src_att.attname AS column_name,
+                       tgt_tbl.relname AS referenced_table_name,
+                       tgt_att.attname AS referenced_column_name,
+                       src_keys.ordinality AS column_position
+                FROM pg_catalog.pg_constraint con
+                JOIN pg_catalog.pg_class src_tbl
+                  ON src_tbl.oid = con.conrelid
+                JOIN pg_catalog.pg_namespace src_ns
+                  ON src_ns.oid = src_tbl.relnamespace
+                JOIN pg_catalog.pg_class tgt_tbl
+                  ON tgt_tbl.oid = con.confrelid
+                JOIN pg_catalog.pg_namespace tgt_ns
+                  ON tgt_ns.oid = tgt_tbl.relnamespace
+                CROSS JOIN LATERAL unnest(con.conkey)
+                  WITH ORDINALITY AS src_keys(attnum, ordinality)
+                JOIN LATERAL unnest(con.confkey)
+                  WITH ORDINALITY AS tgt_keys(attnum, ordinality)
+                  ON tgt_keys.ordinality = src_keys.ordinality
+                JOIN pg_catalog.pg_attribute src_att
+                  ON src_att.attrelid = src_tbl.oid
+                 AND src_att.attnum = src_keys.attnum
+                JOIN pg_catalog.pg_attribute tgt_att
+                  ON tgt_att.attrelid = tgt_tbl.oid
+                 AND tgt_att.attnum = tgt_keys.attnum
+                WHERE con.contype = 'f'
+                  AND src_ns.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND src_tbl.relname = %s
                   {schema_filter}
-                ORDER BY tc.constraint_name, kcu.ordinal_position
+                ORDER BY con.conname, src_keys.ordinality
                 """,
                 params,
             )
