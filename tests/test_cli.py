@@ -173,3 +173,41 @@ def test_codegen_analysis_wrapper_parses_structured_response(monkeypatch):
     result = cli_helpers.handle_db_codegen_analyze({"connection_id": "conn-1"})
 
     assert result == {"success": True, "table_name": "users"}
+
+
+def test_list_tables_forwards_schema_filter(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    calls = {}
+    config = SimpleNamespace(
+        database=SimpleNamespace(
+            type="postgresql",
+            host="db.example",
+            port=5432,
+            username="reader",
+            password="secret",
+            database="app",
+            charset="utf8mb4",
+        )
+    )
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=lambda: config)
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_connect_test",
+        lambda _args: {"success": True, "connection_id": "pg-1", "server_info": "PostgreSQL"},
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_query_tables",
+        lambda args: calls.update(args=args) or {"success": True, "tables": []},
+    )
+    monkeypatch.setattr(
+        mod.connection_manager, "close_connection", lambda cid: calls.update(close=cid)
+    )
+
+    mod.list_tables(schema="tenant_a")
+
+    assert calls["args"] == {"connection_id": "pg-1", "database": "app", "schema": "tenant_a"}
+    assert calls["close"] == "pg-1"
