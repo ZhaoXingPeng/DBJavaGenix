@@ -119,7 +119,7 @@ class ConfigManager:
         database_type, default_port = scheme_aliases[scheme]
         query = parse_qs(parsed.query)
         if database_type == "sqlite":
-            database = parsed.path or parsed.netloc
+            database = unquote(parsed.path or parsed.netloc)
             if database == "/:memory:":
                 database = ":memory:"
             elif database.startswith("/") and not database.startswith("//"):
@@ -138,7 +138,7 @@ class ConfigManager:
             "type": database_type,
             "host": parsed.hostname or "",
             "port": parsed.port or default_port,
-            "database": parsed.path.lstrip("/"),
+            "database": unquote(parsed.path.lstrip("/")),
             "username": unquote(parsed.username or ""),
             "password": unquote(parsed.password or ""),
             **({"charset": query["charset"][0]} if query.get("charset") else {}),
