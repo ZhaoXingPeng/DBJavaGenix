@@ -154,3 +154,22 @@ def test_analyze_unexpected_failure_closes_connection(monkeypatch):
     with pytest.raises(RuntimeError, match="boom"):
         mod.analyze("users")
     assert calls == ["conn-3"]
+
+
+def test_codegen_analysis_wrapper_parses_structured_response(monkeypatch):
+    from dbjavagenix import cli_helpers
+    from mcp.types import TextContent
+
+    async def fake_analyze(_arguments):
+        return [
+            TextContent(
+                type="text",
+                text='Report\n\nRaw Response: {"success": true, "table_name": "users"}',
+            )
+        ]
+
+    monkeypatch.setattr(cli_helpers, "async_handle_db_codegen_analyze", fake_analyze)
+
+    result = cli_helpers.handle_db_codegen_analyze({"connection_id": "conn-1"})
+
+    assert result == {"success": True, "table_name": "users"}
