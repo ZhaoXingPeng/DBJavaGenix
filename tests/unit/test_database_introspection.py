@@ -270,6 +270,40 @@ def test_postgresql_composite_foreign_keys_pair_columns_by_position():
     assert params == ("orders", "tenant_a")
 
 
+def test_postgresql_expression_indexes_are_preserved():
+    manager = RecordingManager()
+
+    def execute_query(connection_id, query, params=None):
+        manager.calls.append((query, params))
+        if "pg_index" in query:
+            return [
+                {
+                    "key_name": "users_lower_email_idx",
+                    "column_name": "",
+                    "is_unique": True,
+                    "seq_in_index": 1,
+                    "index_type": "btree",
+                }
+            ]
+        return []
+
+    manager.execute_query = execute_query
+    indexes = DatabaseIntrospector(manager).get_indexes("pg-1", "users")
+
+    assert indexes == [
+        {
+            "key_name": "users_lower_email_idx",
+            "column_name": "",
+            "unique": True,
+            "seq_in_index": 1,
+            "index_type": "btree",
+        }
+    ]
+    query, params = manager.calls[0]
+    assert "LEFT JOIN pg_attribute" in query
+    assert params == ("users",)
+
+
 def test_postgresql_get_table_rejects_ambiguous_schema():
     manager = RecordingManager()
 
