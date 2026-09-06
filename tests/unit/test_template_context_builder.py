@@ -14,6 +14,7 @@ from dbjavagenix.generator.template_context import (
     TemplateConfigManager,
     TemplateContextBuilder,
 )
+from dbjavagenix.utils.pom_analyzer import PomAnalyzer, TechnologyStack
 
 
 @pytest.fixture
@@ -242,15 +243,38 @@ class TestBuildContextStructure:
     def test_with_prefix_analysis_creates_suffix(self, builder, rbac_user_table):
         # 提供同前缀的表名集合,前缀分析器应识别出 sys 前缀
         all_tables = ["sys_user", "sys_role", "sys_permission"]
-        ctx = builder.build_context(
-            rbac_user_table, "Default", all_table_names=all_tables
-        )
+        ctx = builder.build_context(rbac_user_table, "Default", all_table_names=all_tables)
         # packageSuffix 应当被设置 (具体值取决于 TablePrefixAnalyzer 实现,
         # 但应为非空字符串,且 packages 应包含该后缀)
         suffix = ctx["packageSuffix"]
         if suffix:
             assert ctx["controllerPackage"].endswith(f".{suffix}")
             assert ctx["serviceImplPackage"].endswith(f".{suffix}")
+
+    def test_project_stack_detection_preserves_analyzer_result(
+        self, builder, monkeypatch, tmp_path
+    ):
+        expected = TechnologyStack(
+            has_javax=True,
+            has_jakarta=False,
+            has_spring_data=True,
+            has_mybatis=False,
+            has_swagger2=True,
+            has_springdoc=False,
+            is_modern_stack=False,
+        )
+
+        def analyze_project_dependencies(_analyzer, **kwargs):
+            assert kwargs["project_root"] == str(tmp_path)
+            return {"technology_stack": expected}
+
+        monkeypatch.setattr(
+            PomAnalyzer, "analyze_project_dependencies", analyze_project_dependencies
+        )
+
+        actual = builder._detect_technology_stack(str(tmp_path), "Default")
+
+        assert actual is expected
 
 
 class TestTemplateConfigManager:
