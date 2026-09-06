@@ -74,8 +74,8 @@ EXPECTED_MAPPINGS = {
     "text_col": ("TEXT", "String"),
     "char_col": ("CHARACTER", "String"),
     "date_col": ("DATE", "LocalDate"),
-    "time_col": ("TIME", "LocalTime"),
-    "timestamp_col": ("TIMESTAMP", "LocalDateTime"),
+    "time_col": ("TIME WITHOUT TIME ZONE", "LocalTime"),
+    "timestamp_col": ("TIMESTAMP WITHOUT TIME ZONE", "LocalDateTime"),
     "timestamptz_col": ("TIMESTAMP WITH TIME ZONE", "OffsetDateTime"),
     "bool_col": ("BOOLEAN", "Boolean"),
     "bytea_col": ("BYTEA", "byte[]"),
@@ -124,8 +124,7 @@ def test_pg_reports_expected_data_types(pg_connection):
     for col, (expected_pg_type, _) in EXPECTED_MAPPINGS.items():
         assert col in actual, f"column {col!r} missing from information_schema"
         assert actual[col] == expected_pg_type, (
-            f"column {col!r}: PG reports {actual[col]!r}, "
-            f"expected {expected_pg_type!r}"
+            f"column {col!r}: PG reports {actual[col]!r}, expected {expected_pg_type!r}"
         )
 
 
@@ -139,9 +138,7 @@ def test_dialect_maps_pg_types_to_correct_java_types(pg_connection):
         pg_type = actual[col]
         java_type = dialect.java_type_for(pg_type)
         if java_type != expected_java:
-            mismatches.append(
-                f"  {col} ({pg_type}): got {java_type!r}, expected {expected_java!r}"
-            )
+            mismatches.append(f"  {col} ({pg_type}): got {java_type!r}, expected {expected_java!r}")
 
     assert not mismatches, "type mapping mismatches:\n" + "\n".join(mismatches)
 
