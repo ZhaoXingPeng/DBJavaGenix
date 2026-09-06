@@ -85,6 +85,37 @@ class DatabaseIntrospector:
             for row in rows
         ]
 
+    def list_table_references(self, connection_id: str) -> List[Dict[str, str | None]]:
+        """Return table names with their schema when the database supports schemas."""
+        config = self._config(connection_id)
+        if config.type != DatabaseType.POSTGRESQL:
+            return [
+                {
+                    "name": table_name,
+                    "schema": None,
+                }
+                for table_name in self.list_tables(connection_id)
+            ]
+
+        rows = self.connection_manager.execute_query(
+            connection_id,
+            """
+            SELECT table_name, table_schema
+            FROM information_schema.tables
+            WHERE table_catalog = current_database()
+              AND table_type = 'BASE TABLE'
+              AND table_schema NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY table_schema, table_name
+            """,
+        )
+        return [
+            {
+                "name": str(self._value(row, "table_name", "name", default="")),
+                "schema": str(self._value(row, "table_schema", default="")) or None,
+            }
+            for row in rows
+        ]
+
     def get_table(
         self, connection_id: str, table_name: str, schema: str | None = None
     ) -> Dict[str, Any]:
