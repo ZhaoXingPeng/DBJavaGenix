@@ -222,6 +222,54 @@ def test_postgresql_describe_table_scopes_all_catalog_queries_to_schema():
     assert all(params == ("users", "tenant_a") for _, params in manager.calls if params)
 
 
+def test_postgresql_composite_foreign_keys_pair_columns_by_position():
+    manager = RecordingManager()
+    original_execute_query = manager.execute_query
+
+    def execute_query(connection_id, query, params=None):
+        manager.calls.append((query, params))
+        if "pg_catalog.pg_constraint" in query:
+            return [
+                {
+                    "constraint_name": "orders_customer_fk",
+                    "column_name": "tenant_id",
+                    "referenced_table_name": "customers",
+                    "referenced_column_name": "tenant_id",
+                    "column_position": 1,
+                },
+                {
+                    "constraint_name": "orders_customer_fk",
+                    "column_name": "customer_id",
+                    "referenced_table_name": "customers",
+                    "referenced_column_name": "id",
+                    "column_position": 2,
+                },
+            ]
+        return original_execute_query(connection_id, query, params)
+
+    manager.execute_query = execute_query
+    foreign_keys = DatabaseIntrospector(manager).get_foreign_keys("pg-1", "orders", "tenant_a")
+
+    assert foreign_keys == [
+        {
+            "constraint_name": "orders_customer_fk",
+            "column_name": "tenant_id",
+            "referenced_table": "customers",
+            "referenced_column": "tenant_id",
+        },
+        {
+            "constraint_name": "orders_customer_fk",
+            "column_name": "customer_id",
+            "referenced_table": "customers",
+            "referenced_column": "id",
+        },
+    ]
+    assert len(manager.calls) == 1
+    query, params = manager.calls[0]
+    assert "tgt_keys.ordinality = src_keys.ordinality" in query
+    assert params == ("orders", "tenant_a")
+
+
 def test_postgresql_get_table_rejects_ambiguous_schema():
     manager = RecordingManager()
 
