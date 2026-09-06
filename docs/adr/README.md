@@ -19,3 +19,6 @@
 - [ADR-008: 引入 MCP v3 elicitation + sampling](008-mcp-v3-elicitation-sampling.md)
 - [ADR-009: 1h prompt caching TTL 作为可选项](009-prompt-caching-1h-ttl.md)
 - [ADR-010: agentic-runner 作为可选启动模式](010-agentic-runner-mode.md)
+- [ADR-011: Multi-dialect strategy](011-multi-dialect-strategy.md)
+- [ADR-012: Pin MCP SDK to the 1.x API contract](012-mcp-sdk-compatibility.md)
+- [ADR-013: Canonical MCP tool contract](013-canonical-mcp-tool-contract.md)

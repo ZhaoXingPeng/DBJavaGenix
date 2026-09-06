@@ -97,7 +97,10 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 # Legacy module is migrated incrementally; avoid whole-file formatter churn.
-exclude = ["src/dbjavagenix/database/mcp_tools.py"]
+exclude = [
+    "src/dbjavagenix/database/mcp_tools.py",
+    "src/dbjavagenix/server/mcp_server.py",
+]
 
 [tool.mypy]
 python_version = "3.11"
