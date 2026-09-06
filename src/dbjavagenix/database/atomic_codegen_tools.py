@@ -73,6 +73,10 @@ def get_atomic_codegen_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Database name (optional, uses connection default)",
                     },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional; required for ambiguous table names)",
+                    },
                     "template_category": {
                         "type": "string",
                         "enum": ["Default", "MybatisPlus", "MybatisPlus-Mixed", "sb35-java21"],
@@ -168,6 +172,7 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
         connection_id = arguments["connection_id"]
         table_name = arguments["table_name"]
         database = arguments.get("database")
+        schema = arguments.get("schema") or None
         template_category = arguments.get("template_category", "MybatisPlus-Mixed")
         author = arguments.get("author", "ZXP")
         package_name = arguments.get("package_name", "com.example.generated")
@@ -199,6 +204,7 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
             all_table_names=all_table_names,
             template_category=template_category,
             project_root=project_path,
+            schema=schema,
         )
 
         context = analysis["template_context"]

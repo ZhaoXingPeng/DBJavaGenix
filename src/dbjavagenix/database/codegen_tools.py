@@ -24,18 +24,19 @@ class CodegenAnalyzer:
         all_table_names: Optional[List[str]] = None,
         template_category: str = "Default",
         project_root: Optional[str] = None,
+        schema: Optional[str] = None,
     ) -> Dict[str, Any]:
         """分析单个表的结构，返回代码生成所需的完整信息"""
 
         # 获取表基本信息
         config = self.introspector.get_config(connection_id)
-        table_info = self.introspector.get_table(connection_id, table_name)
+        table_info = self.introspector.get_table(connection_id, table_name, schema)
 
         # 获取列信息
-        columns = self.introspector.get_columns(connection_id, table_name)
+        columns = self.introspector.get_columns(connection_id, table_name, schema)
 
         # 获取主键信息
-        primary_keys = self.introspector.get_primary_keys(connection_id, table_name)
+        primary_keys = self.introspector.get_primary_keys(connection_id, table_name, schema)
         primary_key_set = set(primary_keys)
         for column in columns:
             column["primary_key"] = (
@@ -43,13 +44,13 @@ class CodegenAnalyzer:
             )
 
         # 获取外键信息
-        foreign_keys = self.introspector.get_foreign_keys(connection_id, table_name)
+        foreign_keys = self.introspector.get_foreign_keys(connection_id, table_name, schema)
 
         # 获取索引信息
-        indexes = self.introspector.get_indexes(connection_id, table_name)
+        indexes = self.introspector.get_indexes(connection_id, table_name, schema)
 
         # 获取数据库名称
-        database_name = config.database or table_info.get("schema") or "unknown"
+        database_name = table_info.get("schema") or config.database or "unknown"
 
         # 构建 TableInfo 对象
         table_obj = self._build_table_info(
@@ -243,9 +244,7 @@ class CodegenGenerator:
         supported_categories = TemplateConfigManager.get_supported_categories()
         if template_category not in supported_categories:
             supported = ", ".join(supported_categories)
-            raise ValueError(
-                f"不支持的模板分类: {template_category!r}；支持分类: {supported}"
-            )
+            raise ValueError(f"不支持的模板分类: {template_category!r}；支持分类: {supported}")
 
         # 生成代码到内存中（不写入文件）
         generated_code = {}

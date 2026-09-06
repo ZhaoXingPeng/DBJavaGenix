@@ -1689,6 +1689,10 @@ def get_codegen_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Database name (optional, uses connection default if not specified)"
                     },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional; required for ambiguous table names)"
+                    },
                     "template_category": {
                         "type": "string",
                         "description": "Template category to use for context building",
@@ -1736,6 +1740,10 @@ def get_codegen_tools() -> List[Tool]:
                     "database": {
                         "type": "string",
                         "description": "Database name (optional, uses connection default if not specified)"
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional; required for ambiguous table names)"
                     },
                     "template_category": {
                         "type": "string",
@@ -1796,6 +1804,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         connection_id = arguments["connection_id"]
         table_name = arguments["table_name"]
         database = arguments.get("database")
+        schema = arguments.get("schema") or None
         template_category = arguments.get("template_category", "MybatisPlus-Mixed")
         author = arguments.get("author", "ZXP")
         package_name = arguments.get("package_name", "com.example.generated")
@@ -1819,7 +1828,8 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
             connection_id,
             table_name,
             template_category=template_category,
-            project_root=project_root
+            project_root=project_root,
+            schema=schema,
         )
         
         # Update template context with user-provided values
@@ -1930,6 +1940,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         connection_id = arguments["connection_id"]
         table_name = arguments["table_name"]
         database = arguments.get("database")
+        schema = arguments.get("schema") or None
         template_category = arguments.get("template_category", "MybatisPlus-Mixed")
         author = arguments.get("author", "ZXP")
         package_name = arguments.get("package_name", "com.example.generated")
@@ -2042,7 +2053,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             table_name,
             all_table_names=all_table_names,  # 传递所有表名用于前缀分析
             template_category=template_category,
-            project_root=str(_ps["project_root"]) if _ps.get("project_root") else None
+            project_root=str(_ps["project_root"]) if _ps.get("project_root") else None,
+            schema=schema,
         )
         
         # Step 2: Update template context with user preferences
