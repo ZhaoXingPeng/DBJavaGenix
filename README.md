@@ -13,10 +13,11 @@ graph LR
     Skills[".claude/skills/<br/>java-codegen-from-db<br/>springboot-migration"]
     Skills -->|按需调用| MCP
 
-    subgraph MCP[MCP Server 29 工具]
+    subgraph MCP[MCP Server 32 工具]
         direction TB
         DB[db_* 连接 / 查询 / 描述]
         Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/mapper]
+        Graph[schema_topo_order<br/>schema_cluster_tables<br/>schema_check_cycles]
         AI[ai_infer_business_names<br/>ai_recommend_template<br/>ai_summarize_schema]
         Vis[db_render_er_diagram]
         Obs[server_metrics / server_health<br/>ai_metrics / search_tools]
@@ -129,12 +130,13 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 - 结构化日志: `DBJAVAGENIX_LOG_FORMAT=json` 可输出单行 JSON,适合 Loki/ELK
 - [部署手册](docs/deployment.md): 3 种部署模式 + 6 个排障场景
 
-## 工具总览 (29 个)
+## 工具总览 (32 个)
 
 | 类别 | 工具 |
 |------|------|
 | 连接 / 查询 | db_connect_test / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
 | 表结构 | db_table_describe / db_table_columns / db_table_primary_keys / db_table_foreign_keys / db_table_indexes |
+| Schema 图算法 | schema_topo_order / schema_cluster_tables / schema_check_cycles |
 | 代码生成 (atomic) | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_mapper |
 | 代码生成 (legacy) | db_codegen_analyze / db_codegen_generate |
 | Spring Boot 项目 | springboot_validate_project / springboot_analyze_dependencies / springboot_read_config |
@@ -164,7 +166,7 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 ```
 [ Skills 层 ]  定义"怎么做" — .claude/skills/*.md  显式 5 阶段工作流
        ↓
-[ MCP 层 ]     提供"能做什么" — 29 个原子工具  context 显式传递
+[ MCP 层 ]     提供"能做什么" — 32 个原子工具  context 显式传递
        ↓
 [ Apps 层 ]    让结果"看得见" — 4 个 UI 组件 (mermaid/dashboard/code-diff/tree)
 ```

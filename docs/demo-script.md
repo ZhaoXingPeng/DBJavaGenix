@@ -49,7 +49,7 @@
 ```
 
 **说**:
-> "29 个工具就绪,modules 全部 OK。注意 progressive 模式 — 初始只暴露 6 个 always-visible 工具,启动 token 从 3300 降到 985。"
+> "32 个工具就绪,modules 全部 OK。注意 progressive 模式 — 初始只暴露 6 个 always-visible 工具,启动 token 从 3300 降到 985。"
 
 ### [0:45] 任务输入 (10 秒)
 
@@ -99,7 +99,7 @@
 **做**: `server_metrics` 看一下累积调用。
 
 **说**:
-> "整个流程透明可观测,29 个工具,5 阶段 Skill 编排,4 个 MCP App 组件。代码在 [github.com/ZhaoXingPeng/DBJavaGenix](https://github.com/ZhaoXingPeng/DBJavaGenix),完整迭代方案在 iteration-plan/ 目录。"
+> "整个流程透明可观测,32 个工具,5 阶段 Skill 编排,4 个 MCP App 组件。代码在 [github.com/ZhaoXingPeng/DBJavaGenix](https://github.com/ZhaoXingPeng/DBJavaGenix),完整迭代方案在 iteration-plan/ 目录。"
 
 ---
 
@@ -116,7 +116,7 @@
 
 打开 README.md 的 mermaid 架构图,讲三层:
 - **Skills**: `.claude/skills/java-codegen-from-db/SKILL.md` — 看一眼"5 阶段工作流"
-- **MCP 29 工具**: 强调 atomic 拆分 (db_codegen_generate → 6 个原子工具)
+- **MCP 32 工具**: 强调 atomic 拆分 (db_codegen_generate → 6 个原子工具) 与 schema 图算法
 - **Apps**: 4 个 UI 组件,客户端按 _meta 渲染
 
 提一句:
