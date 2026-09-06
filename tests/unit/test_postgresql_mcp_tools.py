@@ -1,5 +1,6 @@
 """Unit coverage for PostgreSQL MCP discovery tools without a live database."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -69,6 +70,19 @@ async def test_query_databases_uses_postgresql_catalog(monkeypatch, postgres_inf
 
 
 @pytest.mark.asyncio
+async def test_query_databases_sqlite_raw_response_is_json(monkeypatch):
+    sqlite_info = SimpleNamespace(type=DatabaseType.SQLITE, database="app.sqlite")
+    monkeypatch.setattr(
+        mcp_tools.connection_manager, "get_connection_info", lambda cid: sqlite_info
+    )
+
+    response = await mcp_tools.handle_db_query_databases({"connection_id": "sqlite-1"})
+
+    payload = json.loads(response[0].text.split("Raw Response:", 1)[1].strip())
+    assert payload == {"success": True, "databases": ["app.sqlite"], "count": 1}
+
+
+@pytest.mark.asyncio
 async def test_query_tables_uses_catalog_and_parameters(monkeypatch, postgres_info):
     calls = []
     monkeypatch.setattr(
@@ -90,6 +104,30 @@ async def test_query_tables_uses_catalog_and_parameters(monkeypatch, postgres_in
 
 
 @pytest.mark.asyncio
+async def test_query_tables_raw_response_is_json(monkeypatch, postgres_info):
+    monkeypatch.setattr(
+        mcp_tools.connection_manager, "get_connection_info", lambda cid: postgres_info
+    )
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda *args, **kwargs: [{"table_name": "users"}],
+    )
+
+    response = await mcp_tools.handle_db_query_tables({"connection_id": "pg-1", "database": "app"})
+
+    payload = json.loads(response[0].text.split("Raw Response:", 1)[1].strip())
+    assert payload == {
+        "success": True,
+        "database": "app",
+        "schema": None,
+        "tables": ["users"],
+        "table_references": [{"table_name": "users", "schema": None}],
+        "count": 1,
+    }
+
+
+@pytest.mark.asyncio
 async def test_query_tables_returns_schema_identity_for_postgresql(monkeypatch, postgres_info):
     monkeypatch.setattr(
         mcp_tools.connection_manager, "get_connection_info", lambda cid: postgres_info
@@ -108,10 +146,11 @@ async def test_query_tables_returns_schema_identity_for_postgresql(monkeypatch, 
     payload = response[0].text
     assert "tenant_a" in payload
     assert "tenant_b" in payload
-    assert (
-        "'table_references': [{'table_name': 'users', 'schema': 'tenant_a'}, {'table_name': 'users', 'schema': 'tenant_b'}]"
-        in payload
-    )
+    raw_response = json.loads(payload.split("Raw Response:", 1)[1].strip())
+    assert raw_response["table_references"] == [
+        {"table_name": "users", "schema": "tenant_a"},
+        {"table_name": "users", "schema": "tenant_b"},
+    ]
 
 
 @pytest.mark.asyncio

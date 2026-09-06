@@ -176,6 +176,32 @@ def test_codegen_analysis_wrapper_parses_structured_response(monkeypatch):
     assert result == {"success": True, "table_name": "users"}
 
 
+def test_query_tables_wrapper_parses_json_response(monkeypatch):
+    from dbjavagenix import cli_helpers
+    from mcp.types import TextContent
+
+    async def fake_query(_arguments):
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Found 1 tables in database 'app':\n- users\n\n"
+                    'Raw Response: {"success": true, "database": "app", '
+                    '"schema": null, "tables": ["users"], '
+                    '"table_references": [{"table_name": "users", "schema": null}], '
+                    '"count": 1}'
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(cli_helpers, "async_handle_db_query_tables", fake_query)
+
+    result = cli_helpers.handle_db_query_tables({"connection_id": "conn-1", "database": "app"})
+
+    assert result["success"] is True
+    assert result["tables"] == ["users"]
+
+
 def test_list_tables_forwards_schema_filter(monkeypatch):
     mod = importlib.import_module("dbjavagenix.cli")
     calls = {}
