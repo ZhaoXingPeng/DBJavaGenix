@@ -59,3 +59,30 @@ def test_analyzer_has_no_legacy_direct_metadata_methods():
 async def test_generator_rejects_unknown_category_before_reading_analysis():
     with pytest.raises(ValueError, match="不支持的模板分类"):
         await CodegenGenerator().generate_code({}, template_category="UnknownCategory")
+
+
+@pytest.mark.asyncio
+async def test_generator_does_not_require_unused_table_info(monkeypatch):
+    generator = CodegenGenerator()
+
+    async def render_template(_template_file, _context, _category):
+        return "// generated"
+
+    monkeypatch.setattr(generator, "_render_template", render_template)
+    result = await generator.generate_code(
+        {
+            "table_name": "users",
+            "template_context": {
+                "className": "User",
+                "package": "com.example",
+                "packageSuffix": "",
+            },
+        },
+        template_category="MybatisPlus",
+    )
+
+    assert result["generation_statistics"] == {
+        "total_files": 6,
+        "success_files": 6,
+        "error_files": 0,
+    }

@@ -5,9 +5,8 @@
 
 from typing import Dict, List, Any, Optional
 from ..database.connection_manager import ConnectionManager
-from ..generator.java_generator import JavaCodeGenerator
 from ..generator.template_context import TemplateContextBuilder
-from ..core.models import TableInfo, ColumnInfo, DatabaseType, GenerationConfig
+from ..core.models import TableInfo, ColumnInfo, DatabaseType
 from .introspection import DatabaseIntrospector
 
 
@@ -247,42 +246,6 @@ class CodegenGenerator:
             raise ValueError(
                 f"不支持的模板分类: {template_category!r}；支持分类: {supported}"
             )
-
-        # 构建生成配置
-        config = GenerationConfig(
-            output_dir=generation_config.get("output_dir", "/tmp/generated")
-            if generation_config
-            else "/tmp/generated",
-            author=generation_config.get("author", "ZXP") if generation_config else "ZXP",
-            package_name=generation_config.get("package_name", "com.example.generated")
-            if generation_config
-            else "com.example.generated",
-        )
-
-        # 创建 Java 代码生成器
-        java_generator = JavaCodeGenerator(config)
-
-        # 构建 TableInfo 对象
-        table_info_dict = analysis_result["table_info"]
-        columns = []
-        for col_dict in table_info_dict["columns"]:
-            column = ColumnInfo(
-                name=col_dict["name"],
-                data_type=col_dict["type"],
-                java_type=col_dict.get("java_type", "String"),
-                nullable=col_dict["nullable"],
-                primary_key=col_dict["primary_key"],
-                default_value=col_dict["default_value"],
-                comment=col_dict["comment"],
-            )
-            columns.append(column)
-
-        table_info = TableInfo(
-            name=table_info_dict["name"],
-            schema="test1",  # 使用默认schema
-            comment=table_info_dict["comment"],
-            columns=columns,
-        )
 
         # 生成代码到内存中（不写入文件）
         generated_code = {}
