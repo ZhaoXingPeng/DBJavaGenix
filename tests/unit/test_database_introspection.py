@@ -248,9 +248,7 @@ def test_postgresql_composite_foreign_keys_pair_columns_by_position():
         return original_execute_query(connection_id, query, params)
 
     manager.execute_query = execute_query
-    foreign_keys = DatabaseIntrospector(manager).get_foreign_keys(
-        "pg-1", "orders", "tenant_a"
-    )
+    foreign_keys = DatabaseIntrospector(manager).get_foreign_keys("pg-1", "orders", "tenant_a")
 
     assert foreign_keys == [
         {
