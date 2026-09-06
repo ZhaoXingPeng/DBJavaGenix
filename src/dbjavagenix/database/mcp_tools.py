@@ -22,6 +22,7 @@ from ..core.exceptions import (
 from ..database.connection_manager import connection_manager
 from ..database.introspection import DatabaseIntrospector
 from ..database.sql_identifiers import quote_mysql_identifier
+from ..database.capabilities import supported_database_type_values
 from ..config.config_manager import ConfigManager
 from ..utils.pom_analyzer import PomAnalyzer
 from ..utils.security import redact_sensitive_data, redact_sensitive_text
@@ -208,7 +209,7 @@ def get_connection_tools() -> List[Tool]:
                     },
                     "database_type": {
                         "type": "string",
-                        "enum": ["mysql", "postgresql", "sqlite", "oracle", "sqlserver"],
+                        "enum": supported_database_type_values(),
                         "description": "Database type"
                     },
                     "charset": {

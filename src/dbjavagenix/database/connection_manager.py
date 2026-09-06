@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from ..core.models import DatabaseConfig, DatabaseType
 from ..core.exceptions import DatabaseConnectionError, DatabaseQueryError
 from ..utils.security import redact_sensitive_text
+from .capabilities import SUPPORTED_DATABASE_TYPES, supported_database_type_values
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,12 @@ class ConnectionManager:
             DatabaseConnectionError: If connection fails
         """
         connection_id = str(uuid.uuid4())
+        if config.type not in SUPPORTED_DATABASE_TYPES:
+            supported_types = ", ".join(supported_database_type_values())
+            raise DatabaseConnectionError(
+                f"Unsupported database type: {config.type.value}. "
+                f"Supported database types: {supported_types}"
+            )
         
         try:
             if config.type == DatabaseType.MYSQL:

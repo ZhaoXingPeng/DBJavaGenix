@@ -24,7 +24,7 @@ graph LR
 
     MCP -->|返回 _meta| Apps[MCP Apps 渲染]
     Apps -->|mermaid / dashboard / code-diff / tree| Client
-    MCP -->|读取| Data[MySQL / SQLite + Mustache templates]
+    MCP -->|读取| Data[MySQL / PostgreSQL / SQLite + Mustache templates]
 ```
 
 ## 它解决什么问题
@@ -71,6 +71,12 @@ cd DBJavaGenix
 uv venv && uv pip install -e ".[dev]"
 PYTHONPATH=src python -m dbjavagenix.cli server
 ```
+
+### 数据库支持范围
+
+当前可连接、查询并读取元数据的数据库为 MySQL、PostgreSQL 和 SQLite。Oracle 与
+SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时驱动和元数据契约，不能作为
+当前可用数据库声明。
 
 ### 第一次使用
 
@@ -194,7 +200,7 @@ PYTHONPATH=src python -m dbjavagenix.cli server
 - [x] **v0.2.2**: MCP v3 + AI 工程化 (elicitation 表单 / sampling 借 LLM / 1h prompt caching / agentic-runner)
 
 下一步 (v0.3 候选):
-- DB 后端扩展: PostgreSQL / Oracle 完整支持
+- DB 后端扩展: Oracle / SQL Server 元数据契约与驱动支持
 - 抓取 Claude Desktop / Cursor 截图入仓 (P3.5 收尾)
 - 集成测试: 用 Testcontainers 把 MySQL 拉起跑端到端
 - 性能: 把规则推断与 LLM 路径合并为同一返回 schema (current LLM 路径输出格式与规则略不同)
