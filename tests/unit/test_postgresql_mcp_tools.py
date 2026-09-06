@@ -85,7 +85,33 @@ async def test_query_tables_uses_catalog_and_parameters(monkeypatch, postgres_in
 
     assert "users" in response[0].text
     assert "information_schema.tables" in calls[0][1]
+    assert "table_schema" in calls[0][1]
     assert calls[0][2] == ("app",)
+
+
+@pytest.mark.asyncio
+async def test_query_tables_returns_schema_identity_for_postgresql(monkeypatch, postgres_info):
+    monkeypatch.setattr(
+        mcp_tools.connection_manager, "get_connection_info", lambda cid: postgres_info
+    )
+
+    def execute_query(connection_id, query, params=None):
+        return [
+            {"table_name": "users", "table_schema": "tenant_a"},
+            {"table_name": "users", "table_schema": "tenant_b"},
+        ]
+
+    monkeypatch.setattr(mcp_tools.connection_manager, "execute_query", execute_query)
+
+    response = await mcp_tools.handle_db_query_tables({"connection_id": "pg-1", "database": "app"})
+
+    payload = response[0].text
+    assert "tenant_a" in payload
+    assert "tenant_b" in payload
+    assert (
+        "'table_references': [{'table_name': 'users', 'schema': 'tenant_a'}, {'table_name': 'users', 'schema': 'tenant_b'}]"
+        in payload
+    )
 
 
 @pytest.mark.asyncio
