@@ -107,3 +107,140 @@ async def test_table_exists_uses_postgresql_catalog(monkeypatch, postgres_info):
 
     assert "exists in database" in response[0].text
     assert calls[0][2] == ("app", "users")
+
+
+def test_postgresql_java_mapping_normalizes_catalog_type_names():
+    assert mcp_tools._get_java_type_mapping(
+        DatabaseType.POSTGRESQL, "timestamp with time zone"
+    ) == {"java_type": "OffsetDateTime", "imports": ["java.time.OffsetDateTime"]}
+    assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "uuid") == {
+        "java_type": "UUID",
+        "imports": ["java.util.UUID"],
+    }
+    assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "jsonb") == {
+        "java_type": "String",
+        "imports": [],
+    }
+    assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "character varying(255)") == {
+        "java_type": "String",
+        "imports": [],
+    }
+    assert mcp_tools._get_java_type_mapping(
+        DatabaseType.POSTGRESQL, "timestamp(6) with time zone"
+    ) == {"java_type": "OffsetDateTime", "imports": ["java.time.OffsetDateTime"]}
+
+
+@pytest.mark.asyncio
+async def test_table_describe_uses_normalized_introspection_with_schema(monkeypatch):
+    class Introspector:
+        def __init__(self, manager):
+            assert manager is mcp_tools.connection_manager
+
+        def get_config(self, connection_id):
+            assert connection_id == "pg-1"
+            return SimpleNamespace(type=DatabaseType.POSTGRESQL)
+
+        def describe_table(self, connection_id, table, schema):
+            assert (connection_id, table, schema) == ("pg-1", "users", "tenant_a")
+            return {
+                "name": "users",
+                "schema": "tenant_a",
+                "comment": "tenant users",
+                "columns": [
+                    {
+                        "name": "id",
+                        "type": "USER-DEFINED",
+                        "column_type": "uuid",
+                        "nullable": False,
+                        "default_value": None,
+                        "comment": "identifier",
+                        "primary_key": True,
+                        "precision": None,
+                        "scale": None,
+                        "max_length": None,
+                    }
+                ],
+            }
+
+    monkeypatch.setattr(mcp_tools, "DatabaseIntrospector", Introspector)
+    response = await mcp_tools.handle_db_table_describe(
+        {
+            "connection_id": "pg-1",
+            "database": "app",
+            "schema": "tenant_a",
+            "table": "users",
+            "include_java_types": False,
+        }
+    )
+
+    text = response[0].text
+    assert "tenant_a" in text
+    assert "tenant users" in text
+    assert "USER-DEFINED" in text
+
+
+@pytest.mark.asyncio
+async def test_postgresql_table_detail_tools_forward_schema(monkeypatch):
+    class Introspector:
+        def __init__(self, manager):
+            pass
+
+        def get_columns(self, connection_id, table, schema):
+            assert (connection_id, table, schema) == ("pg-1", "users", "tenant_a")
+            return [
+                {
+                    "name": "id",
+                    "type": "bigint",
+                    "column_type": "bigint",
+                    "nullable": False,
+                    "default_value": None,
+                    "comment": "",
+                    "precision": None,
+                    "scale": None,
+                    "max_length": None,
+                }
+            ]
+
+        def get_primary_keys(self, connection_id, table, schema):
+            assert (connection_id, table, schema) == ("pg-1", "users", "tenant_a")
+            return ["id"]
+
+        def get_foreign_keys(self, connection_id, table, schema):
+            assert (connection_id, table, schema) == ("pg-1", "users", "tenant_a")
+            return [
+                {
+                    "column_name": "org_id",
+                    "referenced_table": "orgs",
+                    "referenced_column": "id",
+                    "constraint_name": "users_org_fk",
+                }
+            ]
+
+        def get_indexes(self, connection_id, table, schema):
+            assert (connection_id, table, schema) == ("pg-1", "users", "tenant_a")
+            return [
+                {
+                    "key_name": "users_pkey",
+                    "column_name": "id",
+                    "seq_in_index": 1,
+                    "unique": True,
+                    "index_type": "btree",
+                }
+            ]
+
+    monkeypatch.setattr(mcp_tools, "DatabaseIntrospector", Introspector)
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "get_connection_info",
+        lambda connection_id: SimpleNamespace(type=DatabaseType.POSTGRESQL),
+    )
+    common = {"connection_id": "pg-1", "database": "app", "schema": "tenant_a", "table": "users"}
+
+    responses = await mcp_tools.handle_db_table_columns(common)
+    assert "bigint" in responses[0].text
+    responses = await mcp_tools.handle_db_table_primary_keys(common)
+    assert "id" in responses[0].text
+    responses = await mcp_tools.handle_db_table_foreign_keys(common)
+    assert "orgs.id" in responses[0].text
+    responses = await mcp_tools.handle_db_table_indexes(common)
+    assert "users_pkey" in responses[0].text
