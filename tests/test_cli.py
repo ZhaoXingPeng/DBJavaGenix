@@ -55,6 +55,7 @@ def _fake_config():
             use_mybatis_plus=True,
             author="Test Author",
             package_name="com.example.generated",
+            output_dir="generated_output",
         ),
     )
 
@@ -221,3 +222,55 @@ def test_extract_table_name_accepts_current_and_legacy_table_shapes():
     assert _extract_table_name({"name": "audit_log"}) == "audit_log"
     assert _extract_table_name({"table_name": ""}) is None
     assert _extract_table_name(42) is None
+
+
+def test_codegen_result_succeeded_accepts_success_report():
+    from dbjavagenix.cli import _codegen_result_succeeded
+
+    assert _codegen_result_succeeded({"success": True}) is True
+    assert (
+        _codegen_result_succeeded({"success": False, "error": "Code Generation Complete: users"})
+        is True
+    )
+    assert _codegen_result_succeeded({"success": False, "error": "connection failed"}) is False
+    assert _codegen_result_succeeded(None) is False
+
+
+def test_generate_uses_current_codegen_contract(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    calls = {"generate": [], "close": []}
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=_fake_config)
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_connect_test",
+        lambda _args: {"success": True, "connection_id": "conn-1"},
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_query_tables",
+        lambda _args: {"success": True, "tables": ["users", "orders"]},
+    )
+
+    def fake_generate(arguments):
+        calls["generate"].append(arguments)
+        return {"success": True, "report": "Code Generation Complete"}
+
+    monkeypatch.setattr(mod, "handle_db_codegen_generate", fake_generate)
+    monkeypatch.setattr(mod.connection_manager, "close_connection", calls["close"].append)
+
+    mod.generate(
+        tables=None,
+        config_path=None,
+        output_dir=None,
+        package_name=None,
+        dry_run=False,
+    )
+
+    assert [call["table_name"] for call in calls["generate"]] == ["users", "orders"]
+    assert all(call["connection_id"] == "conn-1" for call in calls["generate"])
+    assert all(call["template_category"] == "Default" for call in calls["generate"])
+    assert all("table_analysis" not in call for call in calls["generate"])
+    assert calls["close"] == ["conn-1"]

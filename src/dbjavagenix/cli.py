@@ -53,6 +53,13 @@ def _extract_table_name(table: object) -> Optional[str]:
     return None
 
 
+def _codegen_result_succeeded(result: Optional[dict]) -> bool:
+    """Accept structured success and the legacy adapter's success report text."""
+    if not result:
+        return False
+    return bool(result.get("success") or "Code Generation Complete:" in result.get("error", ""))
+
+
 def show_ascii_icon():
     """Display the DBJavaGenix ASCII icon"""
     icon_path = Path(__file__).parent.parent / "config" / "ASCII_ICON.txt"
@@ -211,7 +218,7 @@ def generate(
             return
 
         # Generate code for each table
-        generated_files = []
+        generated_tables = []
         total_tables = len(target_tables)
 
         with console.status("[bold green]Generating code...") as status:
@@ -221,42 +228,24 @@ def generate(
                 )
 
                 try:
-                    # Analyze table structure
-                    analyze_result = handle_db_codegen_analyze(
-                        {
-                            "connection_id": connection_id,
-                            "table_name": table_name,
-                            "all_table_names": target_tables,
-                        }
-                    )
-
-                    if not analyze_result.get("success"):
-                        console.print(f"[red]Failed to analyze table {table_name}[/red]")
-                        continue
-
-                    analysis_data = analyze_result
-
                     # Generate code
                     generate_result = handle_db_codegen_generate(
                         {
-                            "table_analysis": analysis_data,
-                            "template_type": "Default",
-                            "options": {
-                                "useSwagger": True,
-                                "useLombok": True,
-                                "useMapStruct": False,
-                            },
-                            "output_dir": config.generation.output_dir,
+                            "connection_id": connection_id,
+                            "table_name": table_name,
+                            "database": db_config.database,
+                            "template_category": "Default",
+                            "author": config.generation.author,
                             "package_name": config.generation.package_name,
+                            "include_swagger": True,
+                            "include_lombok": True,
+                            "include_mapstruct": False,
                         }
                     )
 
-                    if generate_result and generate_result.get("success"):
-                        files = generate_result.get("generated_files", [])
-                        generated_files.extend(files)
-                        console.print(
-                            f"[green]✓[/green] Generated {len(files)} files for table {table_name}"
-                        )
+                    if _codegen_result_succeeded(generate_result):
+                        generated_tables.append(table_name)
+                        console.print(f"[green]✓[/green] Generated code for table {table_name}")
                     else:
                         console.print(
                             f"[red]✗[/red] Failed to generate code for table {table_name}: {generate_result.get('error')}"
@@ -268,16 +257,16 @@ def generate(
         # Clean up connection
         connection_manager.close_connection(connection_id)
 
-        if generated_files:
+        if generated_tables:
             console.print("\n[green]✓[/green] Code generation completed successfully!")
-            console.print(f"[green]Generated {len(generated_files)} files in total[/green]")
+            console.print(f"[green]Generated code for {len(generated_tables)} tables[/green]")
 
-            # Show generated files
-            console.print("\n[bold]Generated Files:[/bold]")
-            for file_path in generated_files[:10]:  # Show first 10 files
-                console.print(f"  - {file_path}")
-            if len(generated_files) > 10:
-                console.print(f"  ... and {len(generated_files) - 10} more files")
+            # Show generated tables
+            console.print("\n[bold]Generated Tables:[/bold]")
+            for generated_table in generated_tables[:10]:
+                console.print(f"  - {generated_table}")
+            if len(generated_tables) > 10:
+                console.print(f"  ... and {len(generated_tables) - 10} more tables")
         else:
             console.print("[yellow]No files were generated[/yellow]")
 
