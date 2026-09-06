@@ -3,6 +3,7 @@ DBJavaGenix MCP Server
 Provides database analysis and Java code generation capabilities through MCP tools
 """
 import asyncio
+import json
 import logging
 from typing import Any, Callable, Sequence
 
@@ -62,7 +63,7 @@ from ..database.observability_tools import (
     handle_server_metrics,
 )
 from ..utils.metrics import GLOBAL_TOOL_METRICS
-from ..utils.security import redact_sensitive_data
+from ..utils.security import redact_sensitive_data, redact_sensitive_text
 from ..utils.logging_config import configure_logging
 from ..utils.tool_registry import filter_tools_for_listing
 
@@ -123,6 +124,17 @@ def _tool_handlers(tools: list[Tool] | None = None) -> dict[str, Callable[..., A
     return handlers
 
 
+def _tool_error_response(tool_name: str, error_code: str, error: object) -> list[TextContent]:
+    """Build the stable error envelope exposed at the MCP boundary."""
+    payload = {
+        "success": False,
+        "error": error_code,
+        "tool": tool_name,
+        "message": redact_sensitive_text(error),
+    }
+    return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))]
+
+
 @server.list_tools()
 async def handle_list_tools() -> list[Tool]:
     """
@@ -164,16 +176,15 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
     try:
         handler = _tool_handlers().get(name)
         if handler is None:
-            raise ValueError(f"Unknown tool: {name}")
+            _is_error = True
+            return _tool_error_response(name, "unknown_tool", f"Unknown tool: {name}")
         return await handler(arguments)
             
     except Exception as e:
         _is_error = True
-        logger.error(f"Tool execution failed: {e}")
-        return [TextContent(
-            type="text",
-            text=f"Tool execution failed: {str(e)}"
-        )]
+        safe_message = redact_sensitive_text(e)
+        logger.error("Tool execution failed for %s: %s", name, safe_message)
+        return _tool_error_response(name, "tool_execution_failed", safe_message)
     finally:
         _duration_ms = (_time_for_metrics.perf_counter() - _start_perf) * 1000
         GLOBAL_TOOL_METRICS.record(name, _duration_ms, _is_error)
