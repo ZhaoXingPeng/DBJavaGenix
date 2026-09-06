@@ -391,7 +391,7 @@ class DatabaseIntrospector:
             rows = self.connection_manager.execute_query(
                 connection_id,
                 f"""
-                SELECT idx.relname AS key_name, att.attname AS column_name,
+                SELECT idx.relname AS key_name, COALESCE(att.attname, '') AS column_name,
                        i.indisunique AS is_unique, keys.ordinality AS seq_in_index,
                        am.amname AS index_type
                 FROM pg_class tbl
@@ -400,7 +400,7 @@ class DatabaseIntrospector:
                 JOIN pg_class idx ON idx.oid = i.indexrelid
                 JOIN pg_am am ON am.oid = idx.relam
                 CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS keys(attnum, ordinality)
-                JOIN pg_attribute att ON att.attrelid = tbl.oid AND att.attnum = keys.attnum
+                LEFT JOIN pg_attribute att ON att.attrelid = tbl.oid AND att.attnum = keys.attnum
                 WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema')
                   AND tbl.relname = %s
                   {schema_filter}
