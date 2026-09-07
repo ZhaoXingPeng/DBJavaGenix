@@ -243,10 +243,10 @@ class TemplateContextBuilder:
                 "primaryKey": column.primary_key,  # 兼容两种写法
                 "isNullable": column.nullable,
                 "nullable": column.nullable,
-                "isAutoIncrement": getattr(column, "auto_increment", False),
-                "autoIncrement": getattr(column, "auto_increment", False),
+                "isAutoIncrement": column.auto_increment,
+                "autoIncrement": column.auto_increment,
                 "defaultValue": column.default_value,
-                "maxLength": getattr(column, "max_length", None),
+                "maxLength": column.max_length,
                 # 验证相关
                 "required": not column.nullable and not column.primary_key,
                 "isString": self._is_string_type(column.data_type),
@@ -301,10 +301,10 @@ class TemplateContextBuilder:
                 "primaryKey": column.primary_key,  # 兼容两种写法
                 "isNullable": column.nullable,
                 "nullable": column.nullable,
-                "isAutoIncrement": getattr(column, "auto_increment", False),
-                "autoIncrement": getattr(column, "auto_increment", False),
+                "isAutoIncrement": column.auto_increment,
+                "autoIncrement": column.auto_increment,
                 "defaultValue": column.default_value,
-                "maxLength": getattr(column, "max_length", None),
+                "maxLength": column.max_length,
                 # 验证相关
                 "required": not column.nullable and not column.primary_key,
                 "isString": self._is_string_type(column.data_type),
