@@ -124,6 +124,13 @@ class TestJavaTypeMapping:
         assert builder._map_java_type("BYTEA") == "byte[]"
         assert builder._map_java_type("JSONB") == "String"
 
+    def test_sqlite_dialect_is_used_for_context_mapping(self):
+        builder = TemplateContextBuilder(database_type=DatabaseType.SQLITE)
+
+        assert builder.dialect.name == "sqlite"
+        assert builder._map_java_type("INTEGER") == "Long"
+        assert builder._map_jdbc_type("BLOB") == "BINARY"
+
 
 class TestJdbcTypeMapping:
     @pytest.mark.parametrize(
@@ -184,6 +191,29 @@ class TestBuildContextStructure:
             "date",
         ]:
             assert key in ctx, f"missing key {key}"
+
+    def test_typed_column_metadata_is_forwarded(self, builder):
+        table = TableInfo(
+            name="orders",
+            schema="main",
+            columns=[
+                ColumnInfo(
+                    name="id",
+                    data_type="INTEGER",
+                    java_type="Long",
+                    nullable=False,
+                    primary_key=True,
+                    auto_increment=True,
+                    max_length=20,
+                )
+            ],
+        )
+
+        column = builder.build_context(table)["columns"][0]
+
+        assert column["isAutoIncrement"] is True
+        assert column["autoIncrement"] is True
+        assert column["maxLength"] == 20
 
     def test_class_name_from_table(self, builder, rbac_user_table):
         ctx = builder.build_context(rbac_user_table, "Default")
