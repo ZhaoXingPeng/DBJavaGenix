@@ -378,3 +378,39 @@ def test_generate_forwards_schema_to_listing_and_generation(monkeypatch):
     ]
     assert calls["generate"][0]["schema"] == "tenant_a"
     assert calls["close"] == ["conn-1"]
+
+
+def test_generate_forwards_explicit_output_dir(monkeypatch):
+    mod = importlib.import_module("dbjavagenix.cli")
+    calls = {"generate": [], "close": []}
+    monkeypatch.setattr(mod, "show_ascii_icon", lambda: None)
+    monkeypatch.setattr(
+        mod, "ConfigManager", lambda *_args, **_kwargs: SimpleNamespace(load_config=_fake_config)
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_connect_test",
+        lambda _args: {"success": True, "connection_id": "conn-1"},
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_query_tables",
+        lambda _args: {"success": True, "tables": ["users"]},
+    )
+    monkeypatch.setattr(
+        mod,
+        "handle_db_codegen_generate",
+        lambda arguments: calls["generate"].append(arguments) or {"success": True},
+    )
+    monkeypatch.setattr(mod.connection_manager, "close_connection", calls["close"].append)
+
+    mod.generate(
+        tables=None,
+        config_path=None,
+        output_dir="custom-output",
+        package_name=None,
+        dry_run=False,
+    )
+
+    assert calls["generate"][0]["output_dir"] == "custom-output"
+    assert calls["close"] == ["conn-1"]

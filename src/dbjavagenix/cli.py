@@ -257,6 +257,8 @@ def generate(
                     }
                     if schema:
                         generation_args["schema"] = schema
+                    if output_dir:
+                        generation_args["output_dir"] = output_dir
                     generate_result = handle_db_codegen_generate(generation_args)
 
                     if _codegen_result_succeeded(generate_result):
