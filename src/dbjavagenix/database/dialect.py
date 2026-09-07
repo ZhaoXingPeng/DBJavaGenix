@@ -304,6 +304,77 @@ class PostgreSQLDialect(DialectAdapter):
 
 
 # ============================================================
+# SQLite
+# ============================================================
+
+
+class SQLiteDialect(DialectAdapter):
+    """SQLite declared-type and storage-affinity mappings."""
+
+    name = "sqlite"
+
+    @property
+    def type_to_java(self) -> Dict[str, str]:
+        return {
+            "INTEGER": "Long",
+            "INT": "Integer",
+            "TINYINT": "Integer",
+            "SMALLINT": "Integer",
+            "MEDIUMINT": "Integer",
+            "BIGINT": "Long",
+            "TEXT": "String",
+            "CHARACTER": "String",
+            "VARCHAR": "String",
+            "VARYING CHARACTER": "String",
+            "NCHAR": "String",
+            "NATIVE CHARACTER": "String",
+            "NVARCHAR": "String",
+            "CLOB": "String",
+            "REAL": "Double",
+            "DOUBLE": "Double",
+            "DOUBLE PRECISION": "Double",
+            "FLOAT": "Float",
+            "DECIMAL": "BigDecimal",
+            "NUMERIC": "BigDecimal",
+            "BLOB": "byte[]",
+            "DATE": "LocalDate",
+            "DATETIME": "LocalDateTime",
+            "TIMESTAMP": "LocalDateTime",
+            "BOOLEAN": "Boolean",
+        }
+
+    @property
+    def type_to_jdbc(self) -> Dict[str, str]:
+        return {
+            "INTEGER": "BIGINT",
+            "INT": "INTEGER",
+            "TINYINT": "INTEGER",
+            "SMALLINT": "INTEGER",
+            "MEDIUMINT": "INTEGER",
+            "BIGINT": "BIGINT",
+            "TEXT": "VARCHAR",
+            "CHARACTER": "VARCHAR",
+            "VARCHAR": "VARCHAR",
+            "VARYING CHARACTER": "VARCHAR",
+            "NCHAR": "VARCHAR",
+            "NATIVE CHARACTER": "VARCHAR",
+            "NVARCHAR": "VARCHAR",
+            "CLOB": "LONGVARCHAR",
+            "REAL": "DOUBLE",
+            "DOUBLE": "DOUBLE",
+            "DOUBLE PRECISION": "DOUBLE",
+            "FLOAT": "FLOAT",
+            "DECIMAL": "DECIMAL",
+            "NUMERIC": "NUMERIC",
+            "BLOB": "BINARY",
+            "DATE": "DATE",
+            "DATETIME": "TIMESTAMP",
+            "TIMESTAMP": "TIMESTAMP",
+            "BOOLEAN": "BOOLEAN",
+        }
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -311,6 +382,7 @@ class PostgreSQLDialect(DialectAdapter):
 _REGISTRY: Dict[str, DialectAdapter] = {
     "mysql": MySQLDialect(),
     "postgresql": PostgreSQLDialect(),
+    "sqlite": SQLiteDialect(),
 }
 
 

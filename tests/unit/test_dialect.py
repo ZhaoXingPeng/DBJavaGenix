@@ -6,6 +6,7 @@ from dbjavagenix.database.dialect import (
     DialectAdapter,
     MySQLDialect,
     PostgreSQLDialect,
+    SQLiteDialect,
     _strip_paren,
     get_dialect,
     list_supported_dialects,
@@ -30,12 +31,16 @@ class TestRegistry:
     def test_known_dialects(self):
         assert "mysql" in list_supported_dialects()
         assert "postgresql" in list_supported_dialects()
+        assert "sqlite" in list_supported_dialects()
 
     def test_get_mysql(self):
         assert isinstance(get_dialect("mysql"), MySQLDialect)
 
     def test_get_postgresql(self):
         assert isinstance(get_dialect("postgresql"), PostgreSQLDialect)
+
+    def test_get_sqlite(self):
+        assert isinstance(get_dialect("sqlite"), SQLiteDialect)
 
     def test_get_case_insensitive(self):
         assert isinstance(get_dialect("MySQL"), MySQLDialect)
@@ -167,6 +172,33 @@ class TestPostgreSQLDialect:
 
     def test_unknown_falls_back_to_string(self):
         assert self.d.java_type_for("WEIRD_PG_TYPE") == "String"
+
+
+class TestSQLiteDialect:
+    def setup_method(self):
+        self.d = SQLiteDialect()
+
+    def test_storage_affinity_types(self):
+        assert self.d.java_type_for("INTEGER") == "Long"
+        assert self.d.java_type_for("VARCHAR(255)") == "String"
+        assert self.d.java_type_for("REAL") == "Double"
+        assert self.d.java_type_for("BLOB") == "byte[]"
+
+    def test_declared_type_aliases(self):
+        assert self.d.java_type_for("DOUBLE PRECISION") == "Double"
+        assert self.d.java_type_for("VARYING CHARACTER") == "String"
+        assert self.d.java_type_for("TIMESTAMP") == "LocalDateTime"
+
+    def test_jdbc_types(self):
+        assert self.d.jdbc_type_for("INTEGER") == "BIGINT"
+        assert self.d.jdbc_type_for("TEXT") == "VARCHAR"
+        assert self.d.jdbc_type_for("BLOB") == "BINARY"
+        assert self.d.jdbc_type_for("DATETIME") == "TIMESTAMP"
+
+    def test_type_categories(self):
+        assert self.d.is_string_type("TEXT")
+        assert self.d.is_date_type("TIMESTAMP")
+        assert self.d.is_decimal_type("NUMERIC")
 
 
 class TestCrossDialectIsolation:
