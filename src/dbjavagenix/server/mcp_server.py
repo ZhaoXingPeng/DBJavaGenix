@@ -142,6 +142,29 @@ def _tool_error_response(tool_name: str, error_code: str, error: object) -> list
     return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))]
 
 
+def _result_reports_error(result: Sequence[Any]) -> bool:
+    """Detect structured failures returned by handlers without raising exceptions."""
+    markers = ("Raw Response:", "Raw Validation Result:")
+    for item in result:
+        text = getattr(item, "text", None)
+        if not isinstance(text, str):
+            continue
+
+        candidates = [text.strip()]
+        for marker in markers:
+            if marker in text:
+                candidates.append(text.rsplit(marker, 1)[1].strip())
+
+        for candidate in candidates:
+            try:
+                payload = json.loads(candidate)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict) and payload.get("success") is False:
+                return True
+    return False
+
+
 @server.list_tools()
 async def handle_list_tools() -> list[Tool]:
     """
@@ -185,7 +208,9 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         if handler is None:
             _is_error = True
             return _tool_error_response(name, "unknown_tool", f"Unknown tool: {name}")
-        return await handler(arguments)
+        result = await handler(arguments)
+        _is_error = _result_reports_error(result)
+        return result
             
     except Exception as e:
         _is_error = True
