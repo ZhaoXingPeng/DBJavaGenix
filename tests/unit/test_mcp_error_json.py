@@ -73,3 +73,46 @@ async def test_table_list_query_error_raw_response_is_json(monkeypatch):
     assert payload["success"] is False
     assert payload["error"] == "query_failed"
     assert payload["message"] == "[DB_QUERY_FAILED] database unavailable"
+
+
+@pytest.mark.asyncio
+async def test_query_execute_success_raw_response_is_json(monkeypatch):
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda *_args, **_kwargs: [{"id": 1, "name": "Alice"}],
+    )
+
+    response = await mcp_tools.handle_db_query_execute(
+        {"connection_id": "sqlite-1", "query": "SELECT 1", "limit": 10}
+    )
+
+    payload = _raw_payload(response)
+    assert payload["success"] is True
+    assert payload["data"] == [{"id": 1, "name": "Alice"}]
+
+
+@pytest.mark.asyncio
+async def test_table_exists_success_raw_response_is_json(monkeypatch):
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "get_connection_info",
+        lambda _id: SimpleNamespace(type=DatabaseType.SQLITE),
+    )
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda *_args, **_kwargs: [{"count": 1}],
+    )
+
+    response = await mcp_tools.handle_db_query_table_exists(
+        {"connection_id": "sqlite-1", "database": "app", "table": "users"}
+    )
+
+    payload = _raw_payload(response)
+    assert payload == {
+        "success": True,
+        "database": "app",
+        "table": "users",
+        "exists": True,
+    }
