@@ -1,6 +1,6 @@
 """单元测试: database.atomic_codegen_tools (P2.2)
 
-测试 6 个原子代码生成工具的:
+测试 7 个原子代码生成工具的:
 - Tool 定义结构 (name/description/inputSchema)
 - 渲染逻辑 (sb35-java21 + MybatisPlus-Mixed)
 - mapper 工具按 template_category 分发
@@ -25,6 +25,7 @@ from dbjavagenix.database.atomic_codegen_tools import (
     get_atomic_codegen_tools,
     handle_codegen_render_controller,
     handle_codegen_render_dao,
+    handle_codegen_render_dto,
     handle_codegen_render_entity,
     handle_codegen_render_mapper,
     handle_codegen_render_service,
@@ -125,9 +126,9 @@ class _TableNameManager:
 
 
 class TestToolDefinitions:
-    def test_returns_six_tools(self):
+    def test_returns_seven_tools(self):
         tools = get_atomic_codegen_tools()
-        assert len(tools) == 6
+        assert len(tools) == 7
 
     def test_tool_names(self):
         tools = get_atomic_codegen_tools()
@@ -138,6 +139,7 @@ class TestToolDefinitions:
             "codegen_render_dao",
             "codegen_render_service",
             "codegen_render_controller",
+            "codegen_render_dto",
             "codegen_render_mapper",
         }
 
@@ -246,6 +248,30 @@ class TestRenderController:
         code = files[0]["code"]
         assert "@RestController" in code
         assert "SysUserController" in code
+
+
+class TestRenderDto:
+    def test_render_dto_sb35_java21(self, simple_table):
+        ctx = _build_context(simple_table, "sb35-java21")
+        result = asyncio.run(handle_codegen_render_dto({"context": ctx}))
+        payload = json.loads(result[0].text)
+
+        assert payload["language"] == "java"
+        assert len(payload["files"]) == 1
+        file_info = payload["files"][0]
+        assert file_info["template_file"] == "dto.mustache"
+        assert file_info["file_path"].endswith("SysUserDTO.java")
+        assert "public record SysUserDTO" in file_info["code"]
+        assert "Long id" in file_info["code"]
+        assert "String username" in file_info["code"]
+
+    def test_render_dto_non_sb35_returns_empty(self, simple_table):
+        ctx = _build_context(simple_table, "MybatisPlus-Mixed")
+        result = asyncio.run(handle_codegen_render_dto({"context": ctx}))
+        payload = json.loads(result[0].text)
+
+        assert payload["files"] == []
+        assert "record DTO" in payload["note"]
 
 
 class TestRenderMapper:

@@ -166,6 +166,12 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         category="codegen-atomic",
         description_brief="渲染 REST Controller",
     ),
+    "codegen_render_dto": ToolMetadata(
+        name="codegen_render_dto",
+        tags={"render", "dto", "record", "java21", "sb35", "codegen"},
+        category="codegen-atomic",
+        description_brief="渲染 sb35-java21 Java record DTO",
+    ),
     "codegen_render_mapper": ToolMetadata(
         name="codegen_render_mapper",
         tags={"render", "mapper", "mybatis", "xml", "mapstruct"},

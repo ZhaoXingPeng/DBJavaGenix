@@ -33,7 +33,7 @@ DBJavaGenix v0.1 把所有逻辑塞进 `db_codegen_generate` 单个 MCP 工具:
                   - 显式 5 阶段工作流
                   - LLM 加载后照做,不自由发挥
 
-[ MCP 层 ]      原子工具 (32 个)
+[ MCP 层 ]      原子工具 (33 个)
                   - 每个工具职责单一 (build_context / render_entity / ...)
                   - context 显式参数传递,无 server 内部状态
                   - 每个工具单元可测
@@ -69,7 +69,7 @@ DBJavaGenix v0.1 把所有逻辑塞进 `db_codegen_generate` 单个 MCP 工具:
 - MCP Apps 让结果可视化 (4 个 UI 组件)
 
 **坏**:
-- 注册工具数从 15 涨到 32 → 默认模式 token 反而增加 (具体 token 数随工具 schema 变化)
+- 注册工具数从 15 涨到 33 → 默认模式 token 反而增加 (具体 token 数随工具 schema 变化)
 - 通过 progressive mode (ADR-003) 缓解
 
 **待办**:

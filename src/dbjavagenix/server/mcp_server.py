@@ -40,6 +40,7 @@ from ..database.atomic_codegen_tools import (
     handle_codegen_render_dao,
     handle_codegen_render_service,
     handle_codegen_render_controller,
+    handle_codegen_render_dto,
     handle_codegen_render_mapper,
 )
 from ..database.discovery_tools import (

@@ -1,5 +1,5 @@
 """
-P2.2: 原子化代码生成工具 - 把 db_codegen_generate 拆为 6 个职责单一的工具
+P2.2: 原子化代码生成工具 - 把 db_codegen_generate 拆为 7 个职责单一的工具
 
 工作流(对应 .claude/skills/java-codegen-from-db/SKILL.md 阶段 4):
 
@@ -9,6 +9,7 @@ P2.2: 原子化代码生成工具 - 把 db_codegen_generate 拆为 6 个职责�
   4. codegen_render_service    - 渲染 Service 接口 + ServiceImpl
   5. codegen_render_controller - 渲染 REST Controller
   6. codegen_render_mapper     - 渲染 MyBatis XML / Mapper(仅 MybatisPlus/Default)
+  7. codegen_render_dto        - 渲染 sb35-java21 record DTO
 
 设计原则:
   - 不写盘 — render 仅返回 code 字符串,写盘由 Skill 显式调用专门工具(后续阶段)
@@ -34,12 +35,12 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# Tool 定义 - 6 个原子工具
+# Tool 定义 - 7 个原子工具
 # ============================================================
 
 
 def get_atomic_codegen_tools() -> List[Tool]:
-    """返回 P2.2 拆分后的 6 个原子代码生成工具"""
+    """返回 P2.2 拆分后的 7 个原子代码生成工具"""
 
     # 共用的 context 参数 schema:LLM 把 build_context 返回的 dict 原样传入
     context_param_schema = {
@@ -144,6 +145,18 @@ def get_atomic_codegen_tools() -> List[Tool]:
             },
         ),
         Tool(
+            name="codegen_render_dto",
+            description=(
+                "渲染 sb35-java21 的 Java record DTO。需要先调用 "
+                "codegen_build_context 获取 context；其他模板分类不生成 DTO。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"context": context_param_schema},
+                "required": ["context"],
+            },
+        ),
+        Tool(
             name="codegen_render_mapper",
             description=(
                 "渲染 MyBatis XML mapper 或 MapStruct mapper。"
@@ -239,6 +252,7 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
                     "codegen_render_dao",
                     "codegen_render_service",
                     "codegen_render_controller",
+                    "codegen_render_dto",
                     "codegen_render_mapper",
                 ],
             },
@@ -278,6 +292,31 @@ async def handle_codegen_render_service(arguments: Dict[str, Any]) -> List[TextC
 
 async def handle_codegen_render_controller(arguments: Dict[str, Any]) -> List[TextContent]:
     return await _render_single_layer(arguments, ["controller.mustache"])
+
+
+async def handle_codegen_render_dto(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Render the Java 21 record DTO exposed by the sb35-java21 template family."""
+    context = _extract_context(arguments)
+    if not isinstance(context, dict):
+        return [TextContent(type="text", text=json.dumps({"error": "context missing or invalid"}))]
+
+    if context.get("templateCategory") != "sb35-java21":
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "files": [],
+                        "language": "java",
+                        "note": "template_category does not provide a record DTO",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+        ]
+
+    return await _render_single_layer(arguments, ["dto.mustache"])
 
 
 async def handle_codegen_render_mapper(arguments: Dict[str, Any]) -> List[TextContent]:
@@ -380,18 +419,19 @@ async def _render_single_layer(
     from pathlib import Path
 
     template_base = Path(__file__).parent.parent / "templates" / "java"
-    additional = set(TemplateConfigManager.get_additional_templates())
     path_mapping = TemplateConfigManager.get_output_path_mapping()
     engine = MustacheTemplateEngine()
 
     files: List[Dict[str, Any]] = []
     for tpl in template_files:
-        # 附加模板(dto/vo/mapstruct)从 common 目录加载
-        effective_category = "common" if tpl in additional else category
+        # Prefer category-specific templates, then fall back to shared common templates.
+        category_path = template_base / category / tpl
+        common_path = template_base / tpl
+        effective_category = category if category_path.exists() else "common"
         if effective_category == "common":
-            template_path = template_base / tpl
+            template_path = common_path
         else:
-            template_path = template_base / effective_category / tpl
+            template_path = category_path
 
         if not template_path.exists():
             files.append(

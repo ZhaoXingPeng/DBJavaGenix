@@ -17,6 +17,8 @@ from dbjavagenix.database.discovery_tools import (
     get_discovery_tools,
     handle_search_tools,
 )
+from dbjavagenix.database.atomic_codegen_tools import get_atomic_codegen_tools
+from dbjavagenix.server.mcp_server import _all_tools
 from dbjavagenix.utils.tool_registry import (
     filter_tools_for_listing,
     get_all_metadata,
@@ -63,6 +65,29 @@ class TestRegistryStructure:
 
     def test_metadata_unknown_returns_none(self):
         assert get_metadata("nonexistent_tool") is None
+
+    def test_atomic_tools_have_registry_metadata(self):
+        atomic_names = {tool.name for tool in get_atomic_codegen_tools()}
+        assert atomic_names == {
+            "codegen_build_context",
+            "codegen_render_entity",
+            "codegen_render_dao",
+            "codegen_render_service",
+            "codegen_render_controller",
+            "codegen_render_dto",
+            "codegen_render_mapper",
+        }
+        assert all(get_metadata(name) is not None for name in atomic_names)
+
+    def test_dto_is_discoverable(self):
+        results = search_tools_by_query("render dto")
+        assert results
+        assert results[0]["name"] == "codegen_render_dto"
+
+    def test_canonical_tools_match_metadata_registry(self):
+        canonical_names = {tool.name for tool in _all_tools()}
+        metadata_names = {metadata.name for metadata in get_all_metadata()}
+        assert canonical_names == metadata_names
 
 
 class TestSearchQuery:
