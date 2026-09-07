@@ -196,6 +196,30 @@ async def test_table_exists_uses_postgresql_catalog(monkeypatch, postgres_info):
     assert calls[0][2] == ("app", "users")
 
 
+@pytest.mark.asyncio
+async def test_table_exists_applies_postgresql_schema_filter_with_bound_parameter(
+    monkeypatch, postgres_info
+):
+    calls = []
+    monkeypatch.setattr(
+        mcp_tools.connection_manager, "get_connection_info", lambda cid: postgres_info
+    )
+
+    def execute_query(connection_id, query, params=None):
+        calls.append((connection_id, query, params))
+        return [{"count": 1}]
+
+    monkeypatch.setattr(mcp_tools.connection_manager, "execute_query", execute_query)
+
+    response = await mcp_tools.handle_db_query_table_exists(
+        {"connection_id": "pg-1", "database": "app", "table": "users", "schema": "tenant_a"}
+    )
+
+    assert "exists in database" in response[0].text
+    assert "table_schema = %s" in calls[0][1]
+    assert calls[0][2] == ("app", "users", "tenant_a")
+
+
 def test_postgresql_java_mapping_normalizes_catalog_type_names():
     assert mcp_tools._get_java_type_mapping(
         DatabaseType.POSTGRESQL, "timestamp with time zone"

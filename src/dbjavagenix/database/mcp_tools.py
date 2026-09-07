@@ -376,6 +376,10 @@ def get_connection_tools() -> List[Tool]:
                     "table": {
                         "type": "string",
                         "description": "Table name"
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "PostgreSQL schema (optional)"
                     }
                 },
                 "required": ["connection_id", "database", "table"]
@@ -867,6 +871,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         connection_id = arguments["connection_id"]
         database = arguments["database"]
         table = arguments["table"]
+        schema = arguments.get("schema") or None
 
         # Get connection info to determine database type  
         config = connection_manager.get_connection_info(connection_id)
@@ -883,14 +888,17 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
             results = connection_manager.execute_query(connection_id, query, (database, table))
 
         elif config.type == DatabaseType.POSTGRESQL:
+            schema_filter = "AND table_schema = %s" if schema else ""
             query = """
             SELECT COUNT(*) AS count
             FROM information_schema.tables
             WHERE table_catalog = %s
               AND table_name = %s
               AND table_schema NOT IN ('pg_catalog', 'information_schema')
-            """
-            results = connection_manager.execute_query(connection_id, query, (database, table))
+              {schema_filter}
+            """.format(schema_filter=schema_filter)
+            params = (database, table, schema) if schema else (database, table)
+            results = connection_manager.execute_query(connection_id, query, params)
             
         elif config.type == DatabaseType.SQLITE:
             query = """
@@ -909,6 +917,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
             "success": True,
             "database": database,
             "table": table,
+            "schema": schema,
             "exists": exists
         }
         
