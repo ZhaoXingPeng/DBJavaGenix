@@ -6,6 +6,7 @@ stays in this module so callers do not need to branch on vendor details.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 from ..core.exceptions import DatabaseAnalysisError, DatabaseConnectionError
@@ -47,6 +48,22 @@ class DatabaseIntrospector:
     def _sqlite_identifier(value: str) -> str:
         """Quote a SQLite identifier used by PRAGMA statements."""
         return value.replace("'", "''")
+
+    def _sqlite_table_uses_autoincrement(self, connection_id: str, table_name: str) -> bool:
+        """Read SQLite's table DDL to preserve AUTOINCREMENT metadata.
+
+        ``PRAGMA table_info`` exposes the primary-key column as ``INTEGER`` but
+        intentionally omits the AUTOINCREMENT keyword.
+        """
+        rows = self.connection_manager.execute_query(
+            connection_id,
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        )
+        if not rows:
+            return False
+        definition = self._value(rows[0], "sql", default="") or ""
+        return bool(re.search(r"\bAUTOINCREMENT\b", str(definition), re.IGNORECASE))
 
     @staticmethod
     def _mysql_identifier(value: str) -> str:
@@ -233,6 +250,12 @@ class DatabaseIntrospector:
         else:
             raise DatabaseAnalysisError(f"Column metadata not implemented for {config.type}")
 
+        sqlite_autoincrement = (
+            self._sqlite_table_uses_autoincrement(connection_id, table_name)
+            if config.type == DatabaseType.SQLITE
+            and any(bool(self._value(row, "pk", default=0)) for row in rows)
+            else False
+        )
         columns = []
         for row in rows:
             name = self._value(row, "COLUMN_NAME", "column_name", "name", default="")
@@ -266,6 +289,11 @@ class DatabaseIntrospector:
                     "extra": extra,
                     "primary_key": primary_key or bool(self._value(row, "pk", default=0)),
                     "auto_increment": "auto_increment" in str(extra).lower()
+                    or (
+                        sqlite_autoincrement
+                        and bool(self._value(row, "pk", default=0))
+                        and str(self._value(row, "type", default="")).upper() == "INTEGER"
+                    )
                     or str(self._value(row, "type", default="")).upper() == "INTEGER AUTOINCREMENT",
                 }
             )

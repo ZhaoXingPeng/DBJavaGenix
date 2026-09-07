@@ -78,6 +78,32 @@ def test_sqlite_introspection_returns_normalized_metadata():
         manager.close_connection(connection_id)
 
 
+def test_sqlite_introspection_detects_autoincrement_primary_key():
+    manager = ConnectionManager()
+    connection_id = manager.create_connection(
+        DatabaseConfig(
+            type=DatabaseType.SQLITE,
+            host="",
+            port=0,
+            database=":memory:",
+            username="",
+            password="",
+        )
+    )
+    try:
+        manager.execute_query(
+            connection_id,
+            "CREATE TABLE generated_ids (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT)",
+        )
+        columns = DatabaseIntrospector(manager).get_columns(connection_id, "generated_ids")
+
+        assert columns[0]["primary_key"] is True
+        assert columns[0]["auto_increment"] is True
+        assert columns[1]["auto_increment"] is False
+    finally:
+        manager.close_connection(connection_id)
+
+
 def test_sqlite_introspection_escapes_special_table_names():
     manager = ConnectionManager()
     connection_id = manager.create_connection(
