@@ -86,6 +86,44 @@ async def test_handler_exception_returns_redacted_structured_error(monkeypatch):
     assert "db-secret" not in result[0].text
 
 
+@pytest.mark.asyncio
+async def test_structured_failure_response_is_counted_as_error(monkeypatch):
+    async def fail_without_raise(_arguments):
+        return [
+            TextContent(
+                type="text",
+                text='Database query failed\n\nRaw Response: {"success": false, "error": "query_failed"}',
+            )
+        ]
+
+    monkeypatch.setattr(
+        mcp_server, "_tool_handlers", lambda: {"reported_failure": fail_without_raise}
+    )
+    mcp_server.GLOBAL_TOOL_METRICS.reset()
+
+    result = await mcp_server.handle_call_tool("reported_failure", {})
+
+    assert json.loads(result[0].text.split("Raw Response:", 1)[1].strip())["success"] is False
+    stats = mcp_server.GLOBAL_TOOL_METRICS.get_stats("reported_failure")
+    assert stats.calls == 1
+    assert stats.errors == 1
+
+
+@pytest.mark.asyncio
+async def test_structured_success_response_is_not_counted_as_error(monkeypatch):
+    async def success(_arguments):
+        return [TextContent(type="text", text='{"success": true, "value": 1}')]
+
+    monkeypatch.setattr(mcp_server, "_tool_handlers", lambda: {"reported_success": success})
+    mcp_server.GLOBAL_TOOL_METRICS.reset()
+
+    await mcp_server.handle_call_tool("reported_success", {})
+
+    stats = mcp_server.GLOBAL_TOOL_METRICS.get_stats("reported_success")
+    assert stats.calls == 1
+    assert stats.errors == 0
+
+
 def test_handler_registry_rejects_duplicate_tool_names(monkeypatch):
     duplicate = Tool(name="duplicate", description="test", inputSchema={"type": "object"})
     monkeypatch.setattr(mcp_server, "_TOOL_FACTORIES", (lambda: [duplicate, duplicate],))
