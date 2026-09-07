@@ -1,6 +1,6 @@
 name: Feature request
 description: 提议一项聚焦的改进
-title: ":sparkles: feat: 请填写功能摘要"
+title: ":sparkles: feat(module): 请填写功能摘要"
 labels: ["enhancement", "triage"]
 body:
   - type: textarea

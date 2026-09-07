@@ -1,12 +1,13 @@
 ## 标题规范
 
-标题必须使用与 commit 相同的 Gitmoji + Conventional Commits 格式：
+标题必须使用与 commit 相同的 Gitmoji + Conventional Commits 格式，并且必须填写受影响模块 scope：
 
 ```text
 :sparkles: feat(scope): 用中文填写简短动作
 ```
 
 标题和正文描述尽量使用中文；Gitmoji、commit 类型、代码标识、命令、API 名称和错误信息保留原文。
+标题必须使用 Gitmoji 短代码（例如 `:bug:`），不要使用原生 Unicode Emoji；提交或 PR 标题中出现连续问号通常表示编码错误，应先修复编码再提交。
 
 ## 关联 Issue
 

@@ -25,7 +25,7 @@ GITMOJI_TYPES = {
 TITLE_PATTERN = re.compile(
     r"^(?P<emoji>:[a-z0-9_+-]+:) "
     r"(?P<type>feat|fix|test|docs|refactor|perf|ci|build|security|chore|release)"
-    r"(?:\([a-z0-9][a-z0-9._/-]*\))?: (?P<subject>\S(?:.*\S)?)$"
+    r"\([a-z0-9][a-z0-9._/-]*\): (?P<subject>\S(?:.*\S)?)$"
 )
 
 
@@ -35,6 +35,8 @@ def validate_title(title: str) -> list[str]:
     normalized = title.rstrip("\r\n")
     if len(normalized) > 72:
         errors.append("title exceeds 72 characters")
+    if "??" in normalized:
+        errors.append("title contains consecutive '?' characters; check UTF-8 encoding")
     match = TITLE_PATTERN.fullmatch(normalized)
     if not match:
         errors.append("expected ':gitmoji: type(scope): imperative subject'")
