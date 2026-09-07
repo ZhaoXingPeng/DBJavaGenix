@@ -10,7 +10,7 @@
 2. analyze_dependencies
 3. analyze table schema
 4. build template context
-5. render 5 个层 (entity/dao/service/controller/mapper)
+5. render 6 个层 (entity/dao/service/controller/dto/mapper)
 6. compute output paths
 7. write files to disk
 8. format response text
@@ -22,7 +22,7 @@
 
 ## 决定
 
-把上述 8 步拆为 **6 个原子工具**:
+把上述 8 步拆为 **7 个原子工具**:
 
 ```
 codegen_build_context(connection_id, table, template_category, options...)
@@ -33,6 +33,7 @@ codegen_render_entity(context: dict)
 codegen_render_dao(context)        → 同上
 codegen_render_service(context)    → 返回 2 files (interface + impl)
 codegen_render_controller(context) → 同上
+codegen_render_dto(context)        → sb35-java21 record DTO (其他分类返回空)
 codegen_render_mapper(context)     → 根据 templateCategory 智能分发
     (Default → mapper.xml / Mixed → mapper.mustache / sb35-java21 → 空)
 ```

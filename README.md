@@ -13,10 +13,10 @@ graph LR
     Skills[".claude/skills/<br/>java-codegen-from-db<br/>springboot-migration"]
     Skills -->|按需调用| MCP
 
-    subgraph MCP[MCP Server 32 工具]
+    subgraph MCP[MCP Server 33 工具]
         direction TB
         DB[db_* 连接 / 查询 / 描述]
-        Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/mapper]
+        Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/dto/mapper]
         Graph[schema_topo_order<br/>schema_cluster_tables<br/>schema_check_cycles]
         AI[ai_infer_business_names<br/>ai_recommend_template<br/>ai_summarize_schema]
         Vis[db_render_er_diagram]
@@ -30,12 +30,12 @@ graph LR
 
 ## 它解决什么问题
 
-把数据库表反向生成成 Spring Boot 工程 (Entity/DAO/Service/Controller/Mapper) 不是新东西 —— EasyCode、MyBatis-Plus Generator、Renren-generator 都做了多年。**LLM 时代的区别在于:**
+把数据库表反向生成成 Spring Boot 工程 (Entity/DAO/Service/Controller/DTO/Mapper) 不是新东西 —— EasyCode、MyBatis-Plus Generator、Renren-generator 都做了多年。**LLM 时代的区别在于:**
 
 | 维度 | 老工具 | DBJavaGenix v0.2 |
 |------|--------|------------------|
 | 工作流谁定 | 用户在 IDE 点配置面板 | **Skill 文件显式编排** (LLM 不会乱调) |
-| 调用粒度 | 一个大按钮一步到位 | **6 个原子工具** (build_context + 5 个 render_*),LLM 可中途让用户改 context 重渲 |
+| 调用粒度 | 一个大按钮一步到位 | **7 个原子工具** (build_context + 6 个 render_*),LLM 可中途让用户改 context 重渲 |
 | 启动开销 | (插件,常驻) | 默认 ~3300 tok / 渐进模式 **~985 tok** (节省 70%) |
 | 命名 | 表前缀机械映射 | **15 条规则 + Claude API**,识别 RBAC/电商/CMS 模式 |
 | 输出可视化 | IDE 内文本 | **MCP Apps**: Mermaid ER 图 / 依赖仪表盘 / code-diff / 包结构树 |
@@ -88,19 +88,19 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 3. 调用 `db_render_er_diagram` → 客户端渲染 Mermaid ER 图
 4. 调用 `ai_infer_business_names` 推断 → `sys_user_role` 应是 `UserRoleAssignment`
 5. 调用 `ai_recommend_template` 推荐 → 检测到 RBAC,推 `MybatisPlus-Mixed`
-6. 用 `codegen_build_context` + 5 个 `codegen_render_*` 分层生成,每层返回 code-diff
+6. 用 `codegen_build_context` + 6 个 `codegen_render_*` 分层生成,每层返回 code-diff
 7. 用户确认后写盘
 
 ## 核心能力 (Phase 1 → 5)
 
 ### Phase 1 现代化基础
 - Python ≥ 3.11 / mcp ≥ 1.6 / Spring Boot 3.5 + Java 21 模板
-- 单元测试 360+，GitHub Actions 分层 CI（提交策略、三版本质量、格式、数据库集成、模板、Docker、打包安装）
+- 单元测试 620+，GitHub Actions 分层 CI（提交策略、三版本质量、格式、数据库集成、模板、Docker、打包安装）
 - 多阶段 Dockerfile (`python:3.11-slim` + 非 root 用户)
 
 ### Phase 2 Skills 层与原子工具
 - `.claude/skills/java-codegen-from-db/SKILL.md` 显式定义 5 阶段工作流
-- `db_codegen_generate` 拆为 6 原子工具,context 显式传递
+- `db_codegen_generate` 拆为 7 原子工具,context 显式传递
 - `search_tools` 工具实现 progressive discovery,启动 token 节省 70.2%
 - 第二个 Skill `springboot-migration` (2.7→3.x 升级 checklist)
 - [token usage benchmark](docs/benchmarks/token-usage.md)
@@ -130,14 +130,14 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 - 结构化日志: `DBJAVAGENIX_LOG_FORMAT=json` 可输出单行 JSON,适合 Loki/ELK
 - [部署手册](docs/deployment.md): 3 种部署模式 + 6 个排障场景
 
-## 工具总览 (32 个)
+## 工具总览 (33 个)
 
 | 类别 | 工具 |
 |------|------|
 | 连接 / 查询 | db_connect_test / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
 | 表结构 | db_table_describe / db_table_columns / db_table_primary_keys / db_table_foreign_keys / db_table_indexes |
 | Schema 图算法 | schema_topo_order / schema_cluster_tables / schema_check_cycles |
-| 代码生成 (atomic) | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_mapper |
+| 代码生成 (atomic) | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_dto / codegen_render_mapper |
 | 代码生成 (legacy) | db_codegen_analyze / db_codegen_generate |
 | Spring Boot 项目 | springboot_validate_project / springboot_analyze_dependencies / springboot_read_config |
 | 可视化 | db_render_er_diagram |
@@ -166,7 +166,7 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 ```
 [ Skills 层 ]  定义"怎么做" — .claude/skills/*.md  显式 5 阶段工作流
        ↓
-[ MCP 层 ]     提供"能做什么" — 32 个原子工具  context 显式传递
+[ MCP 层 ]     提供"能做什么" — 33 个原子工具  context 显式传递
        ↓
 [ Apps 层 ]    让结果"看得见" — 4 个 UI 组件 (mermaid/dashboard/code-diff/tree)
 ```
@@ -234,7 +234,7 @@ PYTHONPATH=src python scripts/verify_mcp_apps.py
 ## 贡献
 
 1. Fork → 创建 feature/* 分支
-2. 写测试 (`tests/unit/`),`pytest tests/unit/` 应保持 360+ 全过
+2. 写测试 (`tests/unit/`),`pytest tests/unit/` 应保持 620+ 全过
 3. `ruff check src/ tests/` 通过 (CI 会跑)
 4. 提 PR,链接到对应的 iteration-plan 阶段
 

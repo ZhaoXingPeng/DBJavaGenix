@@ -3,6 +3,8 @@
 > 测量 P2.2/P2.3 重构对 LLM 启动时 tool schema token 占用的影响。
 > 数据采集时间: 2026-05-24,DBJavaGenix v0.2.0 (Phase 2 完成)
 
+> 注：上方数据是 Phase 2 的历史快照。DTO 原子工具加入后，2026-09-07 本地复测为默认模式 33 个工具、19 817 chars（约 4 954 tokens），渐进模式 6 个工具、4 363 chars（约 1 090 tokens）。
+
 ## TL;DR
 
 | 架构 | 启动暴露工具数 | Schema chars | ≈ tokens | 相对节省 |
@@ -42,7 +44,7 @@ print(f'{len(tools)} tools, {total} chars, ≈{total//4} tokens')
 "
 ```
 
-## 完整数据 (After / Default mode, 22 tools)
+## 完整数据 (After / Default mode, 22 tools, historical snapshot)
 
 | 工具 | Schema chars | ≈ tokens | always_visible |
 |------|--------------|----------|----------------|
@@ -99,7 +101,7 @@ LLM 工作流示例(progressive 模式):
 | 注册工具数 | 15 | 22 | 22 (其中 6 暴露) |
 | 启动 tokens | ~2 450 | ~3 304 | **~985** |
 | 单工具最大 schema | `db_codegen_generate` (405 tok) | 同 | 同 |
-| LLM 工作流可拆 | ❌ (一步到位) | ✅ (6 个原子工具) | ✅ |
+| LLM 工作流可拆 | ❌ (一步到位) | ✅ (7 个原子工具) | ✅ |
 | 用户预览/修改时机 | ❌ | ✅ (build_context → render → 预览 → 写) | ✅ |
 
 ## 端到端对话 token 估算(粗略)
@@ -112,7 +114,7 @@ LLM 工作流示例(progressive 模式):
 |------|---------|---------------------|
 | 启动 list_tools | 2 450 | 985 |
 | 单次 codegen 调用输入 schema | ~405 (db_codegen_generate) | ~267 (build_context, 后续 render_* 平均 ~100) |
-| 6 个原子工具调用合计 schema 暴露 | n/a (走 db_codegen_generate 一次) | ~700 (search_tools 拉出 5 个 render_* 工具) |
+| 7 个原子工具调用合计 schema 暴露 | n/a (走 db_codegen_generate 一次) | ~800 (search_tools 拉出 6 个 render_* 工具) |
 | **总 list_tools / schema 部分** | **~2 855** | **~1 685** |
 
 Progressive 路径在节省启动 token 的同时,通过 search_tools 暴露完整工具能力,几乎不损失功能性。
