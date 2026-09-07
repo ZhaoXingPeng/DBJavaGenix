@@ -20,10 +20,19 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..core.java_identifiers import to_pascal_case
+
 
 COMMON_PREFIXES = (
-    "sys_", "biz_", "bd_", "cms_", "ops_", "admin_", "core_",
-    "t_", "tb_",  # 通用建表习惯
+    "sys_",
+    "biz_",
+    "bd_",
+    "cms_",
+    "ops_",
+    "admin_",
+    "core_",
+    "t_",
+    "tb_",  # 通用建表习惯
 )
 
 # 不规则单数化(主要场景,不追求完全覆盖)
@@ -102,7 +111,9 @@ def infer_business_name(
     # 2. 检测关联表: ≥ 2 个外键且其他列很少
     if _is_association_table(columns, foreign_keys):
         # 关联表命名: 用两个外键的 referenced_table 组合
-        ref_tables = [_strip_known_prefix(fk.get("references_table", "")) for fk in foreign_keys[:2]]
+        ref_tables = [
+            _strip_known_prefix(fk.get("references_table", "")) for fk in foreign_keys[:2]
+        ]
         ref_classes = [_to_pascal_case(_singularize(rt)) for rt in ref_tables if rt]
         if len(ref_classes) >= 2:
             class_name = f"{ref_classes[0]}{ref_classes[1]}Assignment"
@@ -178,21 +189,27 @@ def _is_association_table(
     pk_count = sum(1 for c in columns if c.get("primary_key"))
     # 业务列 = 非主键 + 非外键
     business_cols = [
-        c for c in columns
-        if not c.get("primary_key") and c.get("name") not in fk_cols
+        c for c in columns if not c.get("primary_key") and c.get("name") not in fk_cols
     ]
     # 时间戳/审计字段不算业务列
-    business_cols = [
-        c for c in business_cols
-        if not _is_audit_column(c.get("name", ""))
-    ]
+    business_cols = [c for c in business_cols if not _is_audit_column(c.get("name", ""))]
     # 业务列 ≤ 1 (例如 'remark') 视为关联表
     return len(business_cols) <= 1 and pk_count <= 1
 
 
-_AUDIT_PATTERNS = ("created_at", "updated_at", "create_time", "update_time",
-                   "created_by", "updated_by", "deleted_at", "deleted",
-                   "version", "tenant_id", "remark")
+_AUDIT_PATTERNS = (
+    "created_at",
+    "updated_at",
+    "create_time",
+    "update_time",
+    "created_by",
+    "updated_by",
+    "deleted_at",
+    "deleted",
+    "version",
+    "tenant_id",
+    "remark",
+)
 
 
 def _is_audit_column(name: str) -> bool:
@@ -202,7 +219,7 @@ def _is_audit_column(name: str) -> bool:
 def _strip_known_prefix(name: str) -> str:
     for prefix in COMMON_PREFIXES:
         if name.startswith(prefix):
-            return name[len(prefix):]
+            return name[len(prefix) :]
     return name
 
 
@@ -219,7 +236,7 @@ def _singularize(name: str) -> str:
     # ses / xes / ches / shes
     for suf in ("ses", "xes", "ches", "shes"):
         if lower.endswith(suf):
-            return lower[: -2]
+            return lower[:-2]
     # 复数 s 去掉 (排除 ss / us / is 等不应该去的)
     if lower.endswith("s") and not lower.endswith(("ss", "us", "is", "as", "os")):
         return lower[:-1]
@@ -230,8 +247,7 @@ _CAMEL_SPLIT_RE = re.compile(r"[_\-\s]+")
 
 
 def _to_pascal_case(name: str) -> str:
-    parts = [p for p in _CAMEL_SPLIT_RE.split(name) if p]
-    return "".join(p[:1].upper() + p[1:] for p in parts)
+    return to_pascal_case(name)
 
 
 def _tokenize(name: str) -> List[str]:
@@ -239,9 +255,7 @@ def _tokenize(name: str) -> List[str]:
     return [p.lower() for p in _CAMEL_SPLIT_RE.split(name) if p]
 
 
-def infer_business_names_batch(
-    tables: List[Dict[str, Any]]
-) -> List[NamingInference]:
+def infer_business_names_batch(tables: List[Dict[str, Any]]) -> List[NamingInference]:
     """对一批表批量推断 (输入格式与 LLM 模式一致)"""
     return [
         infer_business_name(

@@ -8,6 +8,8 @@ from enum import Enum
 from pydantic import BaseModel, Field
 from urllib.parse import quote
 
+from .java_identifiers import to_pascal_case
+
 
 class DatabaseType(str, Enum):
     """Supported database types"""
@@ -88,8 +90,7 @@ class TableInfo:
     @staticmethod
     def _to_pascal_case(snake_str: str) -> str:
         """Convert snake_case to PascalCase"""
-        components = snake_str.split("_")
-        return "".join(word.capitalize() for word in components)
+        return to_pascal_case(snake_str)
 
 
 class DatabaseConfig(BaseModel):
