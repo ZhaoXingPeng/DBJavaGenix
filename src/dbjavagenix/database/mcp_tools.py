@@ -564,7 +564,7 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
                  f"- Host: {config.host}:{config.port}\n"
                  f"- Type: {config.type.value}\n\n"
                  f"Use this connection_id for subsequent database operations.\n\n"
-                 f"Raw Response: {response}"
+                 f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
         )]
         
     except DatabaseConnectionError as e:
@@ -849,7 +849,10 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         status = "exists" if exists else "does not exist"
         return [TextContent(
             type="text",
-            text=f"Table '{table}' {status} in database '{database}'\n\nRaw Response: {response}"
+            text=(
+                f"Table '{table}' {status} in database '{database}'\n\n"
+                f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
+            )
         )]
         
     except (DatabaseConnectionError, DatabaseQueryError) as e:
@@ -925,7 +928,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         else:
             result_text = "Query executed successfully. No rows returned."
         
-        result_text += f"\n\nRaw Response: {response}"
+        result_text += f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1114,7 +1117,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
             for imp in sorted(java_imports):
                 result_text += f"import {imp};\n"
         
-        result_text += f"\nRaw Response: {response}"
+        result_text += f"\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1250,7 +1253,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
                 result_text += f"  Comment: {row['COLUMN_COMMENT']}\n"
             result_text += "\n"
         
-        result_text += f"Raw Response: {response}"
+        result_text += f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1352,7 +1355,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         else:
             result_text = f"No primary keys found for table {database}.{table}\n"
         
-        result_text += f"\nRaw Response: {response}"
+        result_text += f"\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1494,7 +1497,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         else:
             result_text = f"No foreign keys found for table {database}.{table}\n"
         
-        result_text += f"Raw Response: {response}"
+        result_text += f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1650,7 +1653,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         else:
             result_text = f"No indexes found for table {database}.{table}\n"
         
-        result_text += f"Raw Response: {response}"
+        result_text += f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
