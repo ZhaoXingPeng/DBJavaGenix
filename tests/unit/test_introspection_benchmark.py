@@ -18,7 +18,7 @@ def test_benchmark_reports_contract_and_round_trip_baseline():
     assert result["columns"] == 4
     assert result["indexes"] == 2
     assert result["foreign_keys"] == 1
-    assert result["queries_per_call"] == 6
+    assert result["queries_per_call"] == 7
     assert 0 < result["median_ms"] <= result["p95_ms"] <= result["max_ms"]
 
 

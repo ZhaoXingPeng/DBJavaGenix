@@ -21,4 +21,6 @@ python scripts/benchmark_introspection.py --iterations 30 --warmup 5
 
 ## 当前范围
 
-本次只建立可重放基线，没有改变元数据查询实现，也没有声称性能提升。后续优化必须先用该基准记录前后结果，并同时确认元数据契约测试仍通过。
+当前基准包含 SQLite 自增主键识别所需的 `sqlite_master` DDL 查询，因此固定 schema 的
+`describe_table` 每次调用包含 7 次 SQL 往返。该变化是元数据完整性修复的直接成本，不代表
+性能提升或跨环境结论。后续优化必须先用该基准记录前后结果，并同时确认元数据契约测试仍通过。
