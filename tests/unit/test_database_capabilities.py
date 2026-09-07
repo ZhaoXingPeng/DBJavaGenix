@@ -35,6 +35,18 @@ def test_connection_tool_schema_only_advertises_implemented_databases():
     )
 
 
+def test_table_exists_tool_advertises_optional_postgresql_schema():
+    table_tool = next(
+        tool for tool in get_connection_tools() if tool.name == "db_query_table_exists"
+    )
+
+    assert table_tool.inputSchema["properties"]["schema"] == {
+        "type": "string",
+        "description": "PostgreSQL schema (optional)",
+    }
+    assert "schema" not in table_tool.inputSchema["required"]
+
+
 def test_cli_version_only_advertises_implemented_databases():
     result = CliRunner().invoke(cli.app, ["version"])
 

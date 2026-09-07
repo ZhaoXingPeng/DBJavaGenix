@@ -114,5 +114,6 @@ async def test_table_exists_success_raw_response_is_json(monkeypatch):
         "success": True,
         "database": "app",
         "table": "users",
+        "schema": None,
         "exists": True,
     }
