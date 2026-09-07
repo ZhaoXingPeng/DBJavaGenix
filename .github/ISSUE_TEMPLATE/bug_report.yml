@@ -1,6 +1,6 @@
 name: Bug report
 description: 提交可复现的问题
-title: ":bug: fix: 请填写问题摘要"
+title: ":bug: fix(module): 请填写问题摘要"
 labels: ["bug", "triage"]
 body:
   - type: markdown
