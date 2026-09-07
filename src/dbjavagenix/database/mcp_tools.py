@@ -197,6 +197,72 @@ def _has_top_level_limit_clause(query: str) -> bool:
     return False
 
 
+def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
+    """Return the value span for a simple top-level LIMIT clause.
+
+    Quoted values are masked before matching so a literal such as ``'LIMIT 9'``
+    cannot affect the server-side result cap. The optional ``LIMIT offset,count``
+    form returns the row-count span rather than the offset span.
+    """
+    masked = list(query)
+    index = 0
+    while index < len(masked):
+        if masked[index] not in "'\"`":
+            index += 1
+            continue
+        quote = masked[index]
+        index += 1
+        while index < len(masked):
+            masked[index] = " "
+            if query[index] == quote:
+                if index + 1 < len(masked) and query[index + 1] == quote:
+                    masked[index + 1] = " "
+                    index += 2
+                    continue
+                index += 1
+                break
+            if query[index] == "\\" and quote == "'" and index + 1 < len(masked):
+                masked[index + 1] = " "
+                index += 2
+                continue
+            index += 1
+
+    masked_query = "".join(masked)
+
+    def is_top_level(position: int) -> bool:
+        depth = 0
+        for char in masked_query[:position]:
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+        return depth == 0
+
+    offset_form = re.compile(r"\bLIMIT\s+\d+\s*,\s*(\d+)\b", re.IGNORECASE)
+    for match in offset_form.finditer(masked_query):
+        if is_top_level(match.start()):
+            return match.start(1), match.end(1), int(match.group(1))
+
+    simple_form = re.compile(r"\bLIMIT\s+(ALL|\d+)\b", re.IGNORECASE)
+    for match in simple_form.finditer(masked_query):
+        if is_top_level(match.start()):
+            value = match.group(1).upper()
+            return match.start(1), match.end(1), None if value == "ALL" else int(value)
+    return None
+
+
+def _apply_query_limit(query: str, limit: int) -> str:
+    """Ensure a validated read-only query cannot exceed the requested limit."""
+    span = _top_level_limit_span(query)
+    if span is None:
+        return f"{query} LIMIT {limit}"
+
+    start, end, existing_limit = span
+    if existing_limit is None or existing_limit > limit:
+        return f"{query[:start]}{limit}{query[end:]}"
+    return query
+
+
 def _quote_mysql_identifier(identifier: Any) -> str:
     """Adapt shared identifier validation to the MCP error contract."""
     try:
@@ -897,9 +963,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         if isinstance(limit, bool) or not isinstance(limit, int) or not 0 <= limit <= 10_000:
             raise MCPServiceError("The limit must be an integer between 0 and 10000")
 
-        # Add LIMIT if not present
-        if not _has_top_level_limit_clause(query):
-            query = f"{query} LIMIT {limit}"
+        query = _apply_query_limit(query, limit)
 
         results = connection_manager.execute_query(connection_id, query)
         

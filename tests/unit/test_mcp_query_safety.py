@@ -91,6 +91,63 @@ async def test_db_query_execute_does_not_treat_limit_alias_as_clause(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_db_query_execute_caps_existing_larger_limit(monkeypatch):
+    received = []
+
+    def execute_query(connection_id, query):
+        received.append(query)
+        return []
+
+    monkeypatch.setattr(mcp_tools.connection_manager, "execute_query", execute_query)
+
+    await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": "SELECT id FROM users LIMIT 1000", "limit": 10}
+    )
+
+    assert received == ["SELECT id FROM users LIMIT 10"]
+
+
+@pytest.mark.asyncio
+async def test_db_query_execute_preserves_existing_smaller_limit(monkeypatch):
+    received = []
+
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda _connection_id, query: received.append(query) or [],
+    )
+
+    await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": "SELECT id FROM users LIMIT 3", "limit": 10}
+    )
+
+    assert received == ["SELECT id FROM users LIMIT 3"]
+
+
+@pytest.mark.asyncio
+async def test_db_query_execute_caps_limit_all_and_offset_form(monkeypatch):
+    received = []
+
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda _connection_id, query: received.append(query) or [],
+    )
+
+    await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": "SELECT id FROM users LIMIT ALL", "limit": 10}
+    )
+    await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": "SELECT id FROM users LIMIT 20, 100", "limit": 10}
+    )
+
+    assert received == [
+        "SELECT id FROM users LIMIT 10",
+        "SELECT id FROM users LIMIT 20, 10",
+    ]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("limit", [-1, 10_001, True, "10"])
 async def test_db_query_execute_rejects_invalid_limits(monkeypatch, limit):
     called = False
