@@ -11,6 +11,7 @@ from dbjavagenix.core.models import (
     DatabaseType,
     GenerationConfig,
 )
+from dbjavagenix.core.java_identifiers import is_valid_java_identifier
 
 
 def test_column_info_creation():
@@ -26,6 +27,16 @@ def test_table_info_entity_name():
     """Test TableInfo entity name conversion"""
     table = TableInfo(name="user_profiles", schema="test")
     assert table.entity_name == "UserProfiles"
+
+
+@pytest.mark.parametrize(
+    "table_name,expected",
+    [("order-item", "OrderItem"), ("123_users", "Generated123Users"), ("---", "Generated")],
+)
+def test_table_info_normalizes_java_identifiers(table_name, expected):
+    table = TableInfo(name=table_name, schema="test")
+    assert table.entity_name == expected
+    assert is_valid_java_identifier(table.entity_name)
 
 
 def test_database_config_connection_url():

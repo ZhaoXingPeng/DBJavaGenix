@@ -27,14 +27,10 @@ def template_dir(tmp_path):
     d = tmp_path / "tpl"
     d.mkdir()
     (d / "hello.mustache").write_text("Hello {{name}}!", encoding="utf-8")
-    (d / "loop.mustache").write_text(
-        "{{#items}}- {{.}}\n{{/items}}", encoding="utf-8"
-    )
+    (d / "loop.mustache").write_text("{{#items}}- {{.}}\n{{/items}}", encoding="utf-8")
     sub = d / "java"
     sub.mkdir()
-    (sub / "entity.mustache").write_text(
-        "package {{pkg}}; class {{cls}} {}", encoding="utf-8"
-    )
+    (sub / "entity.mustache").write_text("package {{pkg}}; class {{cls}} {}", encoding="utf-8")
     return d
 
 
@@ -184,9 +180,7 @@ class TestTemplateContextEntity:
             name="orders",
             schema="public",
             comment=None,
-            columns=[
-                ColumnInfo(name="id", data_type="BIGINT", java_type="Long", primary_key=True)
-            ],
+            columns=[ColumnInfo(name="id", data_type="BIGINT", java_type="Long", primary_key=True)],
         )
         ctx = TemplateContext.build_entity_context(t, sample_config)
         assert "entity" in ctx["comment"].lower()
@@ -229,3 +223,10 @@ class TestCamelCase:
     )
     def test_to_camel_case(self, snake, expected):
         assert TemplateContext._to_camel_case(snake) == expected
+
+    @pytest.mark.parametrize(
+        "database_name,expected",
+        [("order-item", "orderItem"), ("class", "class_"), ("123_name", "generated123Name")],
+    )
+    def test_to_camel_case_sanitizes_java_identifiers(self, database_name, expected):
+        assert TemplateContext._to_camel_case(database_name) == expected

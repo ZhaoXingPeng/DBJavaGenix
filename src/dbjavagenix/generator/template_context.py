@@ -6,6 +6,7 @@
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from ..core.models import TableInfo, ColumnInfo, DatabaseType
+from ..core.java_identifiers import to_camel_case, to_pascal_case
 from ..database.dialect import DialectAdapter, get_dialect
 
 
@@ -366,14 +367,11 @@ class TemplateContextBuilder:
 
     def _to_pascal_case(self, name: str) -> str:
         """转换为 PascalCase"""
-        # 移除下划线并转换为 PascalCase
-        words = name.split("_")
-        return "".join(word.capitalize() for word in words)
+        return to_pascal_case(name)
 
     def _to_camel_case(self, name: str) -> str:
         """转换为 camelCase"""
-        pascal_case = self._to_pascal_case(name)
-        return pascal_case[0].lower() + pascal_case[1:] if pascal_case else ""
+        return to_camel_case(name)
 
     def _map_java_type(self, db_type: str) -> str:
         """映射数据库类型到 Java 类型"""

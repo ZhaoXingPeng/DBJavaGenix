@@ -6,6 +6,7 @@
 import pytest
 
 from dbjavagenix.core.models import ColumnInfo, DatabaseType, TableInfo
+from dbjavagenix.core.java_identifiers import is_valid_java_identifier
 from dbjavagenix.database.mcp_tools import (
     get_codegen_tools,
     get_springboot_project_tools,
@@ -188,6 +189,30 @@ class TestBuildContextStructure:
         ctx = builder.build_context(rbac_user_table, "Default")
         assert ctx["className"] == "SysUser"
         assert ctx["entityNameLowerCase"] == "sysUser"
+
+    def test_special_names_produce_valid_java_identifiers(self, builder):
+        table = TableInfo(
+            name="order-item",
+            schema="test",
+            columns=[
+                ColumnInfo(name="class", data_type="VARCHAR(20)", java_type="String"),
+                ColumnInfo(name="123_display-name", data_type="VARCHAR(20)", java_type="String"),
+            ],
+        )
+
+        context = builder.build_context(table, "sb35-java21")
+
+        assert context["className"] == "OrderItem"
+        assert [column["javaName"] for column in context["columns"]] == [
+            "class_",
+            "generated123DisplayName",
+        ]
+        assert all(is_valid_java_identifier(column["javaName"]) for column in context["columns"])
+        assert context["tableName"] == "order-item"
+        assert [column["name"] for column in context["columns"]] == [
+            "class",
+            "123_display-name",
+        ]
 
     def test_packages_default_no_suffix(self, builder, rbac_user_table):
         ctx = builder.build_context(rbac_user_table, "Default")
