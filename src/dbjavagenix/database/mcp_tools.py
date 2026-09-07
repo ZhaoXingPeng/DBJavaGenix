@@ -70,6 +70,14 @@ def _resolve_codegen_output_path(base_dir: Path, relative_path: object) -> Path:
     return resolved_output
 
 
+def _display_codegen_path(path: Path, project_root: Path) -> str:
+    """Prefer a project-relative path, falling back to an absolute custom path."""
+    try:
+        return str(path.relative_to(project_root))
+    except ValueError:
+        return str(path.absolute())
+
+
 def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
     """Tokenize enough SQL to enforce the single, read-only statement contract."""
     tokens: List[tuple[str, str]] = []
@@ -1779,6 +1787,10 @@ def get_codegen_tools() -> List[Tool]:
                         "description": "Target Spring Boot project path (with src/main/java)",
                         "default": "test_project"
                     },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Optional explicit output directory; defaults to the project source structure"
+                    },
                     "include_swagger": {
                         "type": "boolean",
                         "description": "Include Swagger annotations in generated code",
@@ -1962,6 +1974,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         include_lombok = arguments.get("include_lombok", True)
         include_mapstruct = arguments.get("include_mapstruct", True)
         project_path = arguments.get("project_path")
+        output_dir_arg = arguments.get("output_dir")
         
         # Validate connection exists
         config = connection_manager.get_connection_info(connection_id)
@@ -2127,7 +2140,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         generation_config = {
             "author": author,
             "package_name": package_name,
-            "output_dir": "generated_output"  # 添加输出目录配置
+            "output_dir": output_dir_arg or "generated_output"
         }
         
         generation_result = await generator.generate_code(
@@ -2144,7 +2157,13 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         project_structure = _detect_project_structure(project_path)
         
         # 确定输出目录
-        if project_structure["java_source_dir"] and project_structure["java_source_dir"].exists():
+        if output_dir_arg:
+            output_root = Path(output_dir_arg).expanduser()
+            java_source_dir = output_root
+            resources_dir = output_root / "resources"
+            java_source_dir.mkdir(parents=True, exist_ok=True)
+            resources_dir.mkdir(parents=True, exist_ok=True)
+        elif project_structure["java_source_dir"] and project_structure["java_source_dir"].exists():
             java_source_dir = project_structure["java_source_dir"]
             resources_dir = project_structure["resources_dir"]
         else:
@@ -2256,8 +2275,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         if project_structure["project_root"]:
             result_text += f"   📁 Project Root: {project_structure['project_root'].name}/\n"
-            result_text += f"   ☕ Java Source: {java_source_dir.relative_to(project_structure['project_root'])}/\n"
-            result_text += f"   📄 Resources: {resources_dir.relative_to(project_structure['project_root'])}/\n"
+            result_text += f"   ☕ Java Source: {_display_codegen_path(java_source_dir, project_structure['project_root'])}/\n"
+            result_text += f"   📄 Resources: {_display_codegen_path(resources_dir, project_structure['project_root'])}/\n"
         
         # 显示依赖警告
         if dependency_warnings:
