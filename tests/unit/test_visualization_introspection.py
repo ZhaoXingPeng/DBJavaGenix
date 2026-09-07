@@ -66,6 +66,8 @@ def test_sqlite_er_queries_escape_special_table_names(monkeypatch):
             return [{"name": "id", "type": "INTEGER", "pk": 1}]
         if query == "PRAGMA foreign_key_list('odd''table')":
             return []
+        if query == "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?":
+            return [{"sql": 'CREATE TABLE "odd\'table" (id INTEGER PRIMARY KEY)'}]
         raise AssertionError(f"unexpected query: {query}")
 
     monkeypatch.setattr(visualization_tools.connection_manager, "execute_query", execute_query)
@@ -81,5 +83,6 @@ def test_sqlite_er_queries_escape_special_table_names(monkeypatch):
     assert foreign_keys == []
     assert calls == [
         ("PRAGMA table_info('odd''table')", None),
+        ("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", ("odd'table",)),
         ("PRAGMA foreign_key_list('odd''table')", None),
     ]
