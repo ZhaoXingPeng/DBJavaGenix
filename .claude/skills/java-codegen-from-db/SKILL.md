@@ -103,25 +103,35 @@ when_not_to_use:
 
 ---
 
-## 阶段 3: 语义增强(推荐,Phase 4 工具可用后启用)
+## 阶段 3: 语义增强(推荐)
 
-> 当前 Phase 2 时这些工具尚未实现,跳过本阶段直接进 4。
+当前 MCP server 已提供阶段 3 的 AI 工具。它们默认使用本地规则，不依赖
+`ANTHROPIC_API_KEY`；只有用户明确允许时才通过 `prefer_llm=true` 请求 Claude。
 
-**目的**: 让 LLM 推断"业务上合理的类名/字段名",而不是机械拼接表名。
+**目的**: 让 LLM 推断"业务上合理的类名/字段名",并在生成前选择匹配的模板，而不是机械拼接表名。
 
-### 3.1 推断业务命名(待实现)
+### 3.1 概述 schema(多表时推荐)
 
-- 调用 `ai_infer_business_names`(Phase 4 工具,详见 iteration-plan)
-- 例: `sys_user_role` → `UserRoleAssignment`(关系实体)
+- 调用 `ai_summarize_schema`，传入阶段 2 收集的 `table_names`、`foreign_keys`，可选传入 `table_column_counts`。
+- 向用户展示返回的 `narrative`、`modules`、`core_entities`、`relationships`，作为后续命名和模板推荐的共同上下文。
 
-### 3.2 推荐模板(待实现)
+### 3.2 推断业务命名
 
-- 调用 `ai_recommend_template`
-- 例: 检测到 RBAC 模式 → 建议 `MybatisPlus-Mixed` 或 `sb35-java21`
+- 调用 `ai_infer_business_names`，传入 `tables` 数组；每项至少包含 `name`，并尽量附上 `columns` 和 `foreign_keys`。
+- 需要外部模型增强时才传 `prefer_llm: true`，否则使用规则结果；不要把数据库密码放入工具参数。
+- 向用户展示每项返回的 `class_name`、`field_naming`、`table_kind`、`reason` 和 `confidence`。
+- 例: `sys_user_role` → `UserRoleAssignment`(关系实体)。
 
-### 3.3 用户确认点 ★
+### 3.3 推荐模板
 
-LLM **必须**把推断结果呈现给用户,等用户确认或修改,再进下一步。**禁止默认接受**。
+- 调用 `ai_recommend_template`，传入整库 `table_names` 和可选 `foreign_keys`。
+- 用户明确偏好 Java 21 / Spring Boot 3.x 时传 `hint_modern_stack: true`，否则让规则按 schema 模式推荐。
+- 向用户展示 `recommended_template`、`options`、`matched_pattern`、`confidence` 和 `reasons`。
+- 例: 检测到 RBAC 模式 → 建议 `MybatisPlus-Mixed`；现代栈偏好 → 建议 `sb35-java21`。
+
+### 3.4 用户确认点 ★
+
+LLM **必须**把 schema 概述、命名推断和模板推荐呈现给用户，等用户确认或修改，再进下一步。**禁止默认接受**。
 
 ---
 
@@ -229,8 +239,9 @@ LLM **必须**把推断结果呈现给用户,等用户确认或修改,再进下�
          db_table_describe          (×N 张表)
          db_table_foreign_keys      (×N 张表)
 
-[语义]   ai_infer_business_names    (Phase 4 后启用)
-         ai_recommend_template      (Phase 4 后启用)
+[语义]   ai_summarize_schema        (多表时推荐)
+         ai_infer_business_names    (规则默认,可选 prefer_llm)
+         ai_recommend_template      (按 schema 模式推荐)
 
 [生成]   codegen_build_context      (×1 per 表)
          codegen_render_entity      (×1 per 表)
@@ -253,4 +264,4 @@ LLM **必须**把推断结果呈现给用户,等用户确认或修改,再进下�
 
 ## 与 iteration-plan 的对应
 
-本 skill 实现 `iteration-plan/01-target-architecture.md` 第二章的工作流定义。Phase 2.2 拆分工具、Phase 4 引入 AI 工具后,本文件需同步更新阶段 3 和阶段 4。
+本 skill 实现 `iteration-plan/01-target-architecture.md` 第二章的工作流定义。工具契约变化时必须同步更新本文件，并由 Skill 契约测试校验关键工具仍可发现。
