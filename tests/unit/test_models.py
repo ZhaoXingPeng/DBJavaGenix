@@ -21,6 +21,19 @@ def test_column_info_creation():
     assert column.name == "user_id"
     assert column.java_type == "Long"
     assert column.primary_key is True
+    assert column.auto_increment is False
+
+
+def test_column_info_persists_auto_increment_metadata():
+    column = ColumnInfo(
+        name="id",
+        data_type="BIGINT",
+        java_type="Long",
+        primary_key=True,
+        auto_increment=True,
+    )
+
+    assert column.auto_increment is True
 
 
 def test_table_info_entity_name():

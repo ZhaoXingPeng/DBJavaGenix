@@ -1,5 +1,6 @@
 """Unit tests for the public code-generation analysis workflow."""
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -162,6 +163,39 @@ async def test_table_analysis_forwards_schema_to_all_metadata_queries():
     assert {call[3] for call in introspector.calls} == {"tenant_a"}
     assert result["table_info"]["schema"] == "tenant_a"
     assert result["relationships"]["primary_keys"] == ["id"]
+
+
+def test_table_analysis_keeps_column_metadata_typed():
+    analyzer = CodegenAnalyzer(object())
+    introspector = _SchemaAwareIntrospector()
+
+    def get_columns(_connection_id, _table_name, _schema=None):
+        return [
+            {
+                "name": "id",
+                "type": "BIGINT",
+                "nullable": False,
+                "primary_key": True,
+                "default_value": None,
+                "comment": "Primary key",
+                "auto_increment": True,
+                "max_length": None,
+                "precision": None,
+                "scale": None,
+            }
+        ]
+
+    introspector.get_columns = get_columns
+    analyzer.introspector = introspector
+
+    result = asyncio.run(
+        analyzer.analyze_table_for_codegen("mysql-1", "users", template_category="Default")
+    )
+
+    column = result["table_info"]["columns"][0]
+    assert column["auto_increment"] is True
+    assert column["precision"] is None
+    assert column["scale"] is None
 
 
 def test_codegen_entrypoints_expose_optional_schema():
