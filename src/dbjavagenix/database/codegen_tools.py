@@ -160,12 +160,11 @@ class CodegenAnalyzer:
                 primary_key=col["primary_key"],
                 default_value=col["default_value"],
                 comment=col["comment"],
+                auto_increment=col["auto_increment"],
+                max_length=col["max_length"],
+                precision=col.get("precision"),
+                scale=col.get("scale"),
             )
-            # 添加额外属性
-            column_obj.auto_increment = col["auto_increment"]
-            column_obj.max_length = col["max_length"]
-            column_obj.precision = col.get("precision")
-            column_obj.scale = col.get("scale")
             column_objects.append(column_obj)
 
         table_obj = TableInfo(
@@ -193,10 +192,10 @@ class CodegenAnalyzer:
             "primary_key": column.primary_key,
             "default_value": column.default_value,
             "comment": column.comment,
-            "auto_increment": getattr(column, "auto_increment", False),
-            "max_length": getattr(column, "max_length", None),
-            "precision": getattr(column, "precision", None),
-            "scale": getattr(column, "scale", None),
+            "auto_increment": column.auto_increment,
+            "max_length": column.max_length,
+            "precision": column.precision,
+            "scale": column.scale,
             "java_type": column.java_type,
         }
 

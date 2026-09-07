@@ -68,6 +68,7 @@ class ColumnInfo:
     max_length: Optional[int] = None
     precision: Optional[int] = None
     scale: Optional[int] = None
+    auto_increment: bool = False
 
 
 @dataclass
