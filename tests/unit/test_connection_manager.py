@@ -134,6 +134,57 @@ class TestExecuteQuery:
         rows = mgr.execute_query(cid, "SELECT * FROM e")
         assert rows == []
 
+    def test_sqlite_file_writes_survive_connection_reopen(self, tmp_path):
+        database = tmp_path / "persisted.db"
+        config = DatabaseConfig(
+            type=DatabaseType.SQLITE,
+            host="",
+            port=0,
+            database=str(database),
+            username="",
+            password="",
+        )
+
+        first = ConnectionManager()
+        first_id = first.create_connection(config)
+        first.execute_query(first_id, "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)")
+        first.execute_query(first_id, "INSERT INTO items (id, name) VALUES (?, ?)", (1, "saved"))
+        first.close_connection(first_id)
+
+        second = ConnectionManager()
+        second_id = second.create_connection(config)
+        try:
+            assert second.execute_query(second_id, "SELECT name FROM items") == [{"name": "saved"}]
+        finally:
+            second.close_connection(second_id)
+
+    def test_sqlite_returning_write_is_committed(self, tmp_path):
+        database = tmp_path / "returning.db"
+        config = DatabaseConfig(
+            type=DatabaseType.SQLITE,
+            host="",
+            port=0,
+            database=str(database),
+            username="",
+            password="",
+        )
+        manager = ConnectionManager()
+        connection_id = manager.create_connection(config)
+        try:
+            manager.execute_query(connection_id, "CREATE TABLE items (id INTEGER PRIMARY KEY)")
+            assert manager.execute_query(
+                connection_id, "INSERT INTO items DEFAULT VALUES RETURNING id"
+            ) == [{"id": 1}]
+        finally:
+            manager.close_connection(connection_id)
+
+        reopened = ConnectionManager()
+        reopened_id = reopened.create_connection(config)
+        try:
+            assert reopened.execute_query(reopened_id, "SELECT id FROM items") == [{"id": 1}]
+        finally:
+            reopened.close_connection(reopened_id)
+
 
 class TestGetCursor:
     def test_context_manager_yields_cursor(self, manager_with_conn):

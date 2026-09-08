@@ -217,6 +217,9 @@ class ConnectionManager:
             DatabaseQueryError: If query execution fails
         """
         try:
+            # SQLite defaults to an implicit transaction.  Keep its writes
+            # durable at this boundary without changing the caller's SQL API.
+            connection = self.get_connection(connection_id)
             with self.get_cursor(connection_id) as cursor:
                 cursor.execute(query, params or ())
                 
@@ -233,9 +236,12 @@ class ConnectionManager:
                         else:  # MySQL
                             result.append(dict(zip(columns, row)))
                     
-                    return result
                 else:
-                    return []  # No results (e.g., INSERT/UPDATE/DELETE)
+                    result = []  # No results (e.g., INSERT/UPDATE/DELETE)
+
+                if isinstance(connection, sqlite3.Connection):
+                    connection.commit()
+                return result
                     
         except Exception as e:
             logger.error(f"Query execution failed: {e}")
