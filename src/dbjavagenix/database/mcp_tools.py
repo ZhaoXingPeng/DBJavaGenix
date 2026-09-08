@@ -2,6 +2,7 @@
 MCP tools for database connection and basic query operations
 """
 from base64 import b64encode
+import asyncio
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 import json
@@ -350,6 +351,66 @@ def _quote_mysql_identifier(identifier: Any) -> str:
         raise MCPServiceError(str(exc)) from exc
 
 
+async def _run_db_call(callable_obj, *args):
+    """Run one blocking database operation outside the MCP event loop."""
+    return await asyncio.to_thread(callable_obj, *args)
+
+
+async def _run_async_db_call(callable_obj, *args, **kwargs):
+    """Run an async analyzer whose internals contain blocking DB calls in a worker."""
+    def run() -> Any:
+        return asyncio.run(callable_obj(*args, **kwargs))
+
+    return await asyncio.to_thread(run)
+
+
+def _connect_and_probe(config: DatabaseConfig) -> tuple[str, str]:
+    """Create a connection and perform the initial blocking connectivity probe."""
+    connection_id = connection_manager.create_connection(config)
+    connection_manager.get_connection(connection_id)
+    server_info = ""
+    try:
+        if config.type == DatabaseType.MYSQL:
+            with connection_manager.get_cursor(connection_id) as cursor:
+                cursor.execute("SELECT VERSION() as version")
+                result = cursor.fetchone()
+                if result:
+                    server_info = f"MySQL {result[0] if isinstance(result, tuple) else result['version']}"
+        elif config.type == DatabaseType.POSTGRESQL:
+            with connection_manager.get_cursor(connection_id) as cursor:
+                cursor.execute("SELECT version() AS version")
+                result = cursor.fetchone()
+                if result:
+                    server_info = (
+                        f"PostgreSQL {result[0] if isinstance(result, tuple) else result['version']}"
+                    )
+        elif config.type == DatabaseType.SQLITE:
+            server_info = "SQLite"
+    except Exception as exc:
+        logger.warning("Could not get server info: %s", exc)
+        server_info = f"{config.type.value} (version unknown)"
+    return connection_id, server_info
+
+
+def _collect_all_table_names(connection_id: str, config: DatabaseConfig) -> List[str]:
+    """Collect table names for codegen prefix analysis inside a DB worker."""
+    try:
+        with connection_manager.get_cursor(connection_id) as cursor:
+            if config.type == DatabaseType.MYSQL:
+                cursor.execute("SHOW TABLES")
+            elif config.type == DatabaseType.SQLITE:
+                cursor.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
+            else:
+                return []
+            return [row[0] for row in cursor.fetchall()]
+    except Exception as exc:
+        logger.warning("Failed to get all table names for prefix analysis: %s", exc)
+        return []
+
+
 def get_connection_tools() -> List[Tool]:
     """
     Get list of database connection and basic query MCP tools
@@ -663,37 +724,8 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
             charset=arguments.get("charset", "utf8mb4")
         )
         
-        # Create connection
-        connection_id = connection_manager.create_connection(config)
-        
-        # Test basic connectivity
-        connection = connection_manager.get_connection(connection_id)
-        
-        # Get server information
-        server_info = ""
-        try:
-            if config.type == DatabaseType.MYSQL:
-                with connection_manager.get_cursor(connection_id) as cursor:
-                    cursor.execute("SELECT VERSION() as version")
-                    result = cursor.fetchone()
-                    if result:
-                        server_info = f"MySQL {result[0] if isinstance(result, tuple) else result['version']}"
-
-            elif config.type == DatabaseType.POSTGRESQL:
-                with connection_manager.get_cursor(connection_id) as cursor:
-                    cursor.execute("SELECT version() AS version")
-                    result = cursor.fetchone()
-                    if result:
-                        server_info = (
-                            f"PostgreSQL {result[0] if isinstance(result, tuple) else result['version']}"
-                        )
-
-            elif config.type == DatabaseType.SQLITE:
-                server_info = "SQLite"
-                
-        except Exception as e:
-            logger.warning(f"Could not get server info: {e}")
-            server_info = f"{config.type.value} (version unknown)"
+        # Connection setup and the initial probe are blocking driver calls.
+        connection_id, server_info = await _run_db_call(_connect_and_probe, config)
         
         response = {
             "success": True,
@@ -785,7 +817,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
         else:
             raise MCPServiceError(f"Listing databases not implemented for {config.type}")
         
-        results = connection_manager.execute_query(connection_id, query)
+        results = await _run_db_call(connection_manager.execute_query, connection_id, query)
         
         # Extract database names
         databases = []
@@ -876,9 +908,9 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
             raise MCPServiceError(f"Listing tables not implemented for {config.type}")
         
         if params is None:
-            results = connection_manager.execute_query(connection_id, query)
+            results = await _run_db_call(connection_manager.execute_query, connection_id, query)
         else:
-            results = connection_manager.execute_query(connection_id, query, params)
+            results = await _run_db_call(connection_manager.execute_query, connection_id, query, params)
         
         # Extract table names
         tables = []
@@ -964,7 +996,9 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
             FROM information_schema.TABLES
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
             """
-            results = connection_manager.execute_query(connection_id, query, (database, table))
+            results = await _run_db_call(
+                connection_manager.execute_query, connection_id, query, (database, table)
+            )
 
         elif config.type == DatabaseType.POSTGRESQL:
             schema_filter = "AND table_schema = %s" if schema else ""
@@ -977,7 +1011,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
               {schema_filter}
             """.format(schema_filter=schema_filter)
             params = (database, table, schema) if schema else (database, table)
-            results = connection_manager.execute_query(connection_id, query, params)
+            results = await _run_db_call(connection_manager.execute_query, connection_id, query, params)
             
         elif config.type == DatabaseType.SQLITE:
             query = """
@@ -985,7 +1019,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
             FROM sqlite_master 
             WHERE type='table' AND name = ?
             """
-            results = connection_manager.execute_query(connection_id, query, (table,))
+            results = await _run_db_call(connection_manager.execute_query, connection_id, query, (table,))
             
         else:
             raise MCPServiceError(f"Table existence check not implemented for {config.type}")
@@ -1053,7 +1087,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
 
         query = _apply_query_limit(query, limit)
 
-        results = connection_manager.execute_query(connection_id, query)
+        results = await _run_db_call(connection_manager.execute_query, connection_id, query)
         
         response = {
             "success": True,
@@ -1204,7 +1238,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
         include_java_types = arguments.get("include_java_types", True)
         introspector = DatabaseIntrospector(connection_manager)
         config = introspector.get_config(connection_id)
-        metadata = introspector.describe_table(connection_id, table, schema)
+        metadata = await _run_db_call(introspector.describe_table, connection_id, table, schema)
         columns = []
         java_imports = set()
 
@@ -1341,11 +1375,16 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
             ORDER BY ORDINAL_POSITION
             """
-            results = connection_manager.execute_query(connection_id, query, (database, table))
+            results = await _run_db_call(
+                connection_manager.execute_query, connection_id, query, (database, table)
+            )
 
         elif config.type == DatabaseType.POSTGRESQL:
-            columns = DatabaseIntrospector(connection_manager).get_columns(
-                connection_id, table, schema
+            columns = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_columns,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {
@@ -1364,8 +1403,11 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
             ]
             
         elif config.type == DatabaseType.SQLITE:
-            columns = DatabaseIntrospector(connection_manager).get_columns(
-                connection_id, table, schema
+            columns = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_columns,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {
@@ -1471,11 +1513,16 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
               AND CONSTRAINT_NAME = 'PRIMARY'
             ORDER BY ORDINAL_POSITION
             """
-            results = connection_manager.execute_query(connection_id, query, (database, table))
+            results = await _run_db_call(
+                connection_manager.execute_query, connection_id, query, (database, table)
+            )
 
         elif config.type == DatabaseType.POSTGRESQL:
-            primary_keys = DatabaseIntrospector(connection_manager).get_primary_keys(
-                connection_id, table, schema
+            primary_keys = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_primary_keys,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {"COLUMN_NAME": column_name, "ORDINAL_POSITION": position}
@@ -1483,8 +1530,11 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
             ]
             
         elif config.type == DatabaseType.SQLITE:
-            primary_keys = DatabaseIntrospector(connection_manager).get_primary_keys(
-                connection_id, table, schema
+            primary_keys = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_primary_keys,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {"COLUMN_NAME": column_name, "ORDINAL_POSITION": position}
@@ -1581,11 +1631,16 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
               AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
             ORDER BY kcu.ORDINAL_POSITION
             """
-            results = connection_manager.execute_query(connection_id, query, (database, table))
+            results = await _run_db_call(
+                connection_manager.execute_query, connection_id, query, (database, table)
+            )
 
         elif config.type == DatabaseType.POSTGRESQL:
-            foreign_keys = DatabaseIntrospector(connection_manager).get_foreign_keys(
-                connection_id, table, schema
+            foreign_keys = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_foreign_keys,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {
@@ -1601,8 +1656,11 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
             ]
             
         elif config.type == DatabaseType.SQLITE:
-            foreign_keys = DatabaseIntrospector(connection_manager).get_foreign_keys(
-                connection_id, table, schema
+            foreign_keys = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_foreign_keys,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {
@@ -1719,11 +1777,16 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
               AND TABLE_NAME = %s
             ORDER BY INDEX_NAME, SEQ_IN_INDEX
             """
-            results = connection_manager.execute_query(connection_id, query, (database, table))
+            results = await _run_db_call(
+                connection_manager.execute_query, connection_id, query, (database, table)
+            )
 
         elif config.type == DatabaseType.POSTGRESQL:
-            indexes = DatabaseIntrospector(connection_manager).get_indexes(
-                connection_id, table, schema
+            indexes = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_indexes,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {
@@ -1739,8 +1802,11 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
             ]
 
         elif config.type == DatabaseType.SQLITE:
-            indexes = DatabaseIntrospector(connection_manager).get_indexes(
-                connection_id, table, schema
+            indexes = await _run_db_call(
+                DatabaseIntrospector(connection_manager).get_indexes,
+                connection_id,
+                table,
+                schema,
             )
             results = [
                 {
@@ -2007,7 +2073,8 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         project_path = arguments.get("project_path")
         proj_struct = _detect_project_structure(project_path)
         project_root = str(proj_struct["project_root"]) if proj_struct.get("project_root") else None
-        analysis_result = await analyzer.analyze_table_for_codegen(
+        analysis_result = await _run_async_db_call(
+            analyzer.analyze_table_for_codegen,
             connection_id,
             table_name,
             template_category=template_category,
@@ -2210,25 +2277,10 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # 获取数据库中的所有表名用于前缀分析
         config = connection_manager.get_connection_info(connection_id)
-        connection = connection_manager.get_connection(connection_id)
-        cursor = connection.cursor()
-        
-        all_table_names = []
-        try:
-            if config.type.name == "MYSQL":
-                cursor.execute("SHOW TABLES")
-                all_table_names = [row[0] for row in cursor.fetchall()]
-            elif config.type.name == "SQLITE":
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-                all_table_names = [row[0] for row in cursor.fetchall()]
-            
-            logger.info(f"Found {len(all_table_names)} tables for prefix analysis: {all_table_names}")
-            
-        except Exception as e:
-            logger.warning(f"Failed to get all table names for prefix analysis: {e}")
-            all_table_names = [table_name]  # 至少包含当前表
-        finally:
-            cursor.close()
+        all_table_names = await _run_db_call(_collect_all_table_names, connection_id, config)
+        if not all_table_names:
+            all_table_names = [table_name]
+        logger.info("Found %s tables for prefix analysis: %s", len(all_table_names), all_table_names)
         
         # ===== STEP 2: 分析表结构（包含前缀优化） =====
         # Initialize analyzer and generator
@@ -2237,7 +2289,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # Step 1: Analyze table structure with all table names for prefix optimization
         _ps = _detect_project_structure(project_path)
-        analysis_result = await analyzer.analyze_table_for_codegen(
+        analysis_result = await _run_async_db_call(
+            analyzer.analyze_table_for_codegen,
             connection_id,
             table_name,
             all_table_names=all_table_names,  # 传递所有表名用于前缀分析

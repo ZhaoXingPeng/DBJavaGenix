@@ -23,6 +23,7 @@ P2.2: 原子化代码生成工具 - 把 db_codegen_generate 拆为 7 个职责�
 """
 
 import json
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -32,6 +33,20 @@ from ..core.exceptions import DatabaseConnectionError, MCPServiceError
 from ..database.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_db_call(callable_obj, *args):
+    """Run blocking database work outside the MCP event loop."""
+    return await asyncio.to_thread(callable_obj, *args)
+
+
+async def _run_async_db_call(callable_obj, *args, **kwargs):
+    """Run the async analyzer in a worker because its introspection is synchronous."""
+
+    def run():
+        return asyncio.run(callable_obj(*args, **kwargs))
+
+    return await asyncio.to_thread(run)
 
 
 # ============================================================
@@ -208,10 +223,11 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
             database = config.database or "information_schema"
 
         # 收集所有表名用于前缀分析(沿用旧逻辑)
-        all_table_names = _collect_all_table_names(connection_id, config)
+        all_table_names = await _run_db_call(_collect_all_table_names, connection_id, config)
 
         analyzer = CodegenAnalyzer(connection_manager)
-        analysis = await analyzer.analyze_table_for_codegen(
+        analysis = await _run_async_db_call(
+            analyzer.analyze_table_for_codegen,
             connection_id,
             table_name,
             all_table_names=all_table_names,
@@ -508,9 +524,8 @@ def _compute_file_path(
 def _collect_all_table_names(connection_id: str, config) -> List[str]:
     """收集库内所有表名(用于前缀分析)。失败时返回空列表。"""
     try:
-        conn = connection_manager.get_connection(connection_id)
-        cursor = conn.cursor()
-        try:
+
+        def collect(cursor) -> List[str]:
             if config.type.name == "MYSQL":
                 cursor.execute("SHOW TABLES")
                 return [row[0] for row in cursor.fetchall()]
@@ -529,6 +544,16 @@ def _collect_all_table_names(connection_id: str, config) -> List[str]:
                 )
                 return [row[0] for row in cursor.fetchall()]
             return []
+
+        if hasattr(connection_manager, "get_cursor"):
+            with connection_manager.get_cursor(connection_id) as cursor:
+                return collect(cursor)
+
+        # Preserve the small test-double contract used by older integrations.
+        connection = connection_manager.get_connection(connection_id)
+        cursor = connection.cursor()
+        try:
+            return collect(cursor)
         finally:
             cursor.close()
     except Exception as e:  # noqa: BLE001

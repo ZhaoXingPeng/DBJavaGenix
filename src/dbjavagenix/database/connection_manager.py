@@ -6,6 +6,7 @@ from collections import OrderedDict
 import re
 from threading import RLock
 import uuid
+import threading
 from typing import Dict, List, Any, Optional
 import pymysql
 import sqlite3
@@ -52,6 +53,8 @@ class ConnectionManager:
     def __init__(self):
         self.connections: Dict[str, Any] = {}
         self.connection_configs: Dict[str, DatabaseConfig] = {}
+        self._registry_lock = threading.RLock()
+        self._connection_locks: Dict[str, Any] = {}
         self._metadata_cache: OrderedDict[
             tuple[str, str, Optional[str]], Dict[str, Any]
         ] = OrderedDict()
@@ -152,16 +155,21 @@ class ConnectionManager:
                 )
                 connection.autocommit = True
             elif config.type == DatabaseType.SQLITE:
-                connection = sqlite3.connect(config.database)
+                # MCP database work runs in worker threads. SQLite's default
+                # thread affinity would reject a connection created elsewhere.
+                connection = sqlite3.connect(config.database, check_same_thread=False)
                 connection.row_factory = sqlite3.Row  # Enable dict-like access
             else:
                 raise DatabaseConnectionError(f"Unsupported database type: {config.type}")
             
-            self.connections[connection_id] = connection
-            # Store config without sensitive data for reference
-            safe_config = config.model_copy()
-            safe_config.password = "***"  # Mask password
-            self.connection_configs[connection_id] = safe_config
+            # Store the connection and its lock atomically with the registry.
+            with self._registry_lock:
+                self.connections[connection_id] = connection
+                self._connection_locks[connection_id] = threading.RLock()
+                # Store config without sensitive data for reference
+                safe_config = config.model_copy()
+                safe_config.password = "***"  # Mask password
+                self.connection_configs[connection_id] = safe_config
             
             logger.info(f"Created connection {connection_id} to {config.type}://{config.host}:{config.port}")
             return connection_id
@@ -184,23 +192,54 @@ class ConnectionManager:
         Raises:
             DatabaseConnectionError: If connection not found
         """
-        if connection_id not in self.connections:
+        with self._connection_lock(connection_id):
+            connection = self._get_connection_unlocked(connection_id)
+            try:
+                if getattr(connection, "closed", 0):
+                    raise DatabaseConnectionError("connection is closed")
+                if hasattr(connection, "ping"):
+                    connection.ping(reconnect=True)
+            except Exception as exc:
+                logger.warning("Connection %s is dead, removing: %s", connection_id, exc)
+                self._close_connection_unlocked(connection_id, connection)
+                raise DatabaseConnectionError(
+                    f"Connection {connection_id} is no longer valid"
+                ) from exc
+            return connection
+
+    @contextmanager
+    def _connection_lock(self, connection_id: str):
+        """Serialize operations for one connection without blocking the registry."""
+        with self._registry_lock:
+            lock = self._connection_locks.get(connection_id)
+            if lock is None or connection_id not in self.connections:
+                raise DatabaseConnectionError(f"Connection {connection_id} not found")
+        with lock:
+            yield
+
+    def _get_connection_unlocked(self, connection_id: str) -> Any:
+        with self._registry_lock:
+            connection = self.connections.get(connection_id)
+        if connection is None:
             raise DatabaseConnectionError(f"Connection {connection_id} not found")
-        
-        connection = self.connections[connection_id]
-        
-        # Test connection is still alive
-        try:
-            if getattr(connection, "closed", 0):
-                raise DatabaseConnectionError("connection is closed")
-            if hasattr(connection, 'ping'):
-                connection.ping(reconnect=True)
-        except Exception as e:
-            logger.warning(f"Connection {connection_id} is dead, removing: {e}")
-            self.close_connection(connection_id)
-            raise DatabaseConnectionError(f"Connection {connection_id} is no longer valid")
-        
         return connection
+
+    def _close_connection_unlocked(self, connection_id: str, connection: Any) -> bool:
+        """Close and remove a connection while its per-connection lock is held."""
+        try:
+            connection.close()
+            closed = True
+        except Exception as exc:
+            logger.error("Error closing connection %s: %s", connection_id, exc)
+            closed = True
+        finally:
+            with self._registry_lock:
+                self.connections.pop(connection_id, None)
+                self.connection_configs.pop(connection_id, None)
+                self._connection_locks.pop(connection_id, None)
+            self.invalidate_metadata_cache(connection_id)
+        logger.info("Closed connection %s", connection_id)
+        return closed
     
     def close_connection(self, connection_id: str) -> bool:
         """
@@ -212,25 +251,19 @@ class ConnectionManager:
         Returns:
             True if connection was closed, False if not found
         """
-        if connection_id not in self.connections:
-            self.invalidate_metadata_cache(connection_id)
-            return False
-        
-        try:
-            connection = self.connections[connection_id]
-            connection.close()
-            self.connections.pop(connection_id, None)
-            self.connection_configs.pop(connection_id, None)
-            self.invalidate_metadata_cache(connection_id)
-            logger.info(f"Closed connection {connection_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Error closing connection {connection_id}: {e}")
-            # Remove from dict anyway
-            self.connections.pop(connection_id, None)
-            self.connection_configs.pop(connection_id, None)
-            self.invalidate_metadata_cache(connection_id)
-            return True
+        with self._registry_lock:
+            if connection_id not in self.connections:
+                self.invalidate_metadata_cache(connection_id)
+                return False
+            lock = self._connection_locks.setdefault(connection_id, threading.RLock())
+        with lock:
+            # A preceding close may have removed the connection while this
+            # caller was waiting for the per-connection lock.
+            with self._registry_lock:
+                current = self.connections.get(connection_id)
+            if current is None:
+                return False
+            return self._close_connection_unlocked(connection_id, current)
     
     def get_connection_info(self, connection_id: str) -> Optional[DatabaseConfig]:
         """
@@ -242,7 +275,8 @@ class ConnectionManager:
         Returns:
             Database configuration or None if not found
         """
-        config = self.connection_configs.get(connection_id)
+        with self._registry_lock:
+            config = self.connection_configs.get(connection_id)
         return config.model_copy(deep=True) if config else None
     
     def list_connections(self) -> Dict[str, Dict[str, Any]]:
@@ -252,15 +286,18 @@ class ConnectionManager:
         Returns:
             Dict of connection_id -> connection_info
         """
+        with self._registry_lock:
+            configs = list(self.connection_configs.items())
+            active_ids = set(self.connections)
         result = {}
-        for conn_id, config in self.connection_configs.items():
+        for conn_id, config in configs:
             result[conn_id] = {
                 "type": config.type,
                 "host": config.host,
                 "port": config.port,
                 "database": config.database,
                 "username": config.username,
-                "status": "active" if conn_id in self.connections else "closed"
+                "status": "active" if conn_id in active_ids else "closed"
             }
         return result
     
@@ -275,12 +312,33 @@ class ConnectionManager:
         Yields:
             Database cursor
         """
-        connection = self.get_connection(connection_id)
-        cursor = connection.cursor()
-        try:
-            yield cursor
-        finally:
-            cursor.close()
+        with self._connection_lock(connection_id):
+            connection = self._get_connection_unlocked(connection_id)
+            try:
+                if getattr(connection, "closed", 0):
+                    raise DatabaseConnectionError("connection is closed")
+                if hasattr(connection, "ping"):
+                    connection.ping(reconnect=True)
+            except Exception as exc:
+                logger.warning("Connection %s is dead, removing: %s", connection_id, exc)
+                self._close_connection_unlocked(connection_id, connection)
+                raise DatabaseConnectionError(
+                    f"Connection {connection_id} is no longer valid"
+                ) from exc
+            try:
+                cursor = connection.cursor()
+            except Exception as exc:
+                logger.warning("Connection %s could not create a cursor: %s", connection_id, exc)
+                self._close_connection_unlocked(connection_id, connection)
+                raise DatabaseConnectionError(
+                    f"Connection {connection_id} is no longer valid"
+                ) from exc
+            try:
+                # Exceptions from the caller's SQL body must propagate without
+                # evicting a healthy connection from the registry.
+                yield cursor
+            finally:
+                cursor.close()
     
     def execute_query(self, connection_id: str, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
         """
