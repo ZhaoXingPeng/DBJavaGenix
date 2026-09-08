@@ -353,7 +353,23 @@ def get_connection_tools() -> List[Tool]:
                 "required": ["host", "port", "username", "password", "database_type"]
             }
         ),
-        
+
+        Tool(
+            name="db_disconnect",
+            description="Close an existing database connection session",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "connection_id": {
+                        "type": "string",
+                        "description": "Connection identifier returned by db_connect_test",
+                        "minLength": 1,
+                    }
+                },
+                "required": ["connection_id"],
+            },
+        ),
+
         Tool(
             name="db_query_databases",
             description="List all databases on the server",
@@ -694,6 +710,66 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
             type="text",
             text=f"Unexpected error: {safe_error}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
+
+
+async def handle_db_disconnect(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Close a connection session and return a stable lifecycle response."""
+    raw_connection_id = arguments.get("connection_id") if isinstance(arguments, dict) else None
+    connection_id = raw_connection_id.strip() if isinstance(raw_connection_id, str) else ""
+
+    if not connection_id:
+        response = {
+            "success": False,
+            "error": "connection_not_found",
+            "connection_id": None,
+            "message": "Connection not found",
+        }
+        return [TextContent(
+            type="text",
+            text=f"Failed to disconnect connection: {response['message']}\n\n"
+                 f"Raw Response: {_json_dumps(response, ensure_ascii=False)}",
+        )]
+
+    try:
+        closed = connection_manager.close_connection(connection_id)
+    except Exception as exc:
+        safe_error = redact_sensitive_text(exc)
+        logger.error("Unexpected error in db_disconnect: %s", safe_error)
+        response = {
+            "success": False,
+            "error": "disconnect_failed",
+            "connection_id": connection_id,
+            "message": safe_error,
+        }
+        return [TextContent(
+            type="text",
+            text=f"Failed to disconnect connection: {safe_error}\n\n"
+                 f"Raw Response: {_json_dumps(response, ensure_ascii=False)}",
+        )]
+
+    if not closed:
+        response = {
+            "success": False,
+            "error": "connection_not_found",
+            "connection_id": connection_id,
+            "message": "Connection not found",
+        }
+        return [TextContent(
+            type="text",
+            text=f"Failed to disconnect connection: {response['message']}\n\n"
+                 f"Raw Response: {_json_dumps(response, ensure_ascii=False)}",
+        )]
+
+    response = {
+        "success": True,
+        "connection_id": connection_id,
+        "message": "Connection closed successfully",
+    }
+    return [TextContent(
+        type="text",
+        text=f"Database connection closed.\n\nRaw Response: "
+             f"{_json_dumps(response, ensure_ascii=False)}",
+    )]
 
 
 async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextContent]:

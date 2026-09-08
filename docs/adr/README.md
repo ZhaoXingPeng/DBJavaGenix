@@ -25,3 +25,4 @@
 
 ### v0.3 (数据库元数据契约)
 - [ADR-014: 统一数据库元数据描述契约](014-metadata-introspection-contract.md)
+- [ADR-015: MCP 连接生命周期与显式释放](015-connection-lifecycle.md)
