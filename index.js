@@ -12,6 +12,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { version } = require('./package.json');
 
 const projectDir = __dirname;
 const srcDir = path.join(projectDir, 'src');
@@ -19,7 +20,7 @@ const srcDir = path.join(projectDir, 'src');
 // 用 stderr 输出启动信息, stdout 留给 MCP JSON-RPC.
 const log = (...args) => process.stderr.write(args.join(' ') + '\n');
 
-log('DBJavaGenix MCP Server v0.1.0');
+log(`DBJavaGenix MCP Server v${version}`);
 log('Starting Python backend in stdio mode...');
 
 if (!fs.existsSync(srcDir) || !fs.existsSync(path.join(srcDir, 'dbjavagenix'))) {
