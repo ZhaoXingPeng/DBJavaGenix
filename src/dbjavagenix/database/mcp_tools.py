@@ -75,6 +75,11 @@ def _query_result_json_default(value: object) -> object:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
+def _json_dumps(value: object) -> str:
+    """Serialize MCP payloads with the same driver-value rules as query results."""
+    return json.dumps(value, ensure_ascii=False, default=_query_result_json_default)
+
+
 def _resolve_codegen_output_path(base_dir: Path, relative_path: object) -> Path:
     """Resolve a generated filename while keeping it inside its output directory."""
     if not isinstance(relative_path, str) or not relative_path.strip():
@@ -1047,9 +1052,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         else:
             result_text = "Query executed successfully. No rows returned."
         
-        result_text += "\n\nRaw Response: " + json.dumps(
-            response, ensure_ascii=False, default=_query_result_json_default
-        )
+        result_text += "\n\nRaw Response: " + _json_dumps(response)
         
         return [TextContent(
             type="text",
@@ -1238,7 +1241,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
             for imp in sorted(java_imports):
                 result_text += f"import {imp};\n"
         
-        result_text += f"\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
+        result_text += f"\nRaw Response: {_json_dumps(response)}"
         
         return [TextContent(
             type="text",
@@ -1374,7 +1377,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
                 result_text += f"  Comment: {row['COLUMN_COMMENT']}\n"
             result_text += "\n"
         
-        result_text += f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
+        result_text += f"Raw Response: {_json_dumps(response)}"
         
         return [TextContent(
             type="text",
@@ -1476,7 +1479,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         else:
             result_text = f"No primary keys found for table {database}.{table}\n"
         
-        result_text += f"\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
+        result_text += f"\nRaw Response: {_json_dumps(response)}"
         
         return [TextContent(
             type="text",
@@ -1618,7 +1621,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         else:
             result_text = f"No foreign keys found for table {database}.{table}\n"
         
-        result_text += f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
+        result_text += f"Raw Response: {_json_dumps(response)}"
         
         return [TextContent(
             type="text",
@@ -1774,7 +1777,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         else:
             result_text = f"No indexes found for table {database}.{table}\n"
         
-        result_text += f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
+        result_text += f"Raw Response: {_json_dumps(response)}"
         
         return [TextContent(
             type="text",
@@ -2040,8 +2043,8 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         result_text += f"  Has Primary Key: {'Yes' if context.get('primaryKey') else 'No'}\n"
         
         # Keep a structured payload for non-MCP callers such as the CLI.
-        result_text += "\n\nRaw Response: " + json.dumps(
-            {"success": True, **analysis_result}, ensure_ascii=False
+        result_text += "\n\nRaw Response: " + _json_dumps(
+            {"success": True, **analysis_result}
         )
         
         return [TextContent(
