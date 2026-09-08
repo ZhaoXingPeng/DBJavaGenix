@@ -265,6 +265,34 @@ class TestBuildContextStructure:
         assert "isPrimaryKey" in first
         assert "isLast" in first
 
+    def test_capitalized_names_preserve_camel_case(self, builder):
+        table = TableInfo(
+            name="api_client",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="api_url",
+                    data_type="VARCHAR(255)",
+                    java_type="String",
+                    primary_key=True,
+                ),
+                ColumnInfo(
+                    name="display_name",
+                    data_type="VARCHAR(255)",
+                    java_type="String",
+                ),
+            ],
+            primary_keys=["api_url"],
+        )
+
+        context = builder.build_context(table, "Default")
+
+        assert [column["capitalizedJavaName"] for column in context["columns"]] == [
+            "ApiUrl",
+            "DisplayName",
+        ]
+        assert context["capitalizedPrimaryKeyName"] == "ApiUrl"
+
     def test_postgresql_context_includes_dialect_imports(self):
         table = TableInfo(
             name="audit_event",

@@ -134,7 +134,7 @@ class TemplateContextBuilder:
             "primaryKeyColumn": primary_key_info["dbName"]
             if primary_key_info
             else "id",  # 数据库列名
-            "capitalizedPrimaryKeyName": primary_key_info["javaName"].capitalize()
+            "capitalizedPrimaryKeyName": self._to_pascal_case(primary_key_info["javaName"])
             if primary_key_info
             else "Id",
             # 导入相关
@@ -233,7 +233,7 @@ class TemplateContextBuilder:
                 # 基础字段信息
                 "name": column.name,  # 数据库字段名
                 "javaName": java_name,  # Java字段名
-                "capitalizedJavaName": java_name.capitalize(),  # 首字母大写的Java字段名
+                "capitalizedJavaName": self._to_pascal_case(java_name),  # 首字母大写的Java字段名
                 "dbName": column.name,
                 "javaType": java_type,
                 "jdbcType": self._map_jdbc_type(column.data_type),
@@ -293,7 +293,7 @@ class TemplateContextBuilder:
                 # 基础字段信息
                 "name": column.name,  # 数据库字段名
                 "javaName": java_name,  # Java字段名
-                "capitalizedJavaName": java_name.capitalize(),  # 首字母大写的Java字段名
+                "capitalizedJavaName": self._to_pascal_case(java_name),  # 首字母大写的Java字段名
                 "dbName": column.name,
                 "javaType": java_type,
                 "jdbcType": self._map_jdbc_type(column.data_type),
