@@ -1856,6 +1856,16 @@ def get_codegen_tools() -> List[Tool]:
                         "description": "Java package name for generated code",
                         "default": "com.example.generated"
                     },
+                    "generate_dto": {
+                        "type": "boolean",
+                        "description": "Generate a DTO artifact when supported",
+                        "default": False
+                    },
+                    "generate_vo": {
+                        "type": "boolean",
+                        "description": "Generate a VO artifact when supported",
+                        "default": False
+                    },
                     "project_path": {
                         "type": "string",
                         "description": "Target Spring Boot project path (with src/main/java)",
@@ -1917,6 +1927,16 @@ def get_codegen_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Optional explicit output directory; defaults to the project source structure"
                     },
+                    "generate_dto": {
+                        "type": "boolean",
+                        "description": "Generate a DTO artifact when supported",
+                        "default": False
+                    },
+                    "generate_vo": {
+                        "type": "boolean",
+                        "description": "Generate a VO artifact when supported",
+                        "default": False
+                    },
                     "include_swagger": {
                         "type": "boolean",
                         "description": "Include Swagger annotations in generated code",
@@ -1959,6 +1979,8 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         template_category = arguments.get("template_category", "MybatisPlus-Mixed")
         author = arguments.get("author", "ZXP")
         package_name = arguments.get("package_name", "com.example.generated")
+        generate_dto = arguments.get("generate_dto")
+        generate_vo = arguments.get("generate_vo")
         
         # Validate connection exists
         config = connection_manager.get_connection_info(connection_id)
@@ -1995,6 +2017,13 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
             "isMybatisPlusMixed": template_category == "MybatisPlus-Mixed",
             "isSb35Java21": template_category == "sb35-java21",
         })
+        from ..generator.template_context import apply_generation_options
+
+        apply_generation_options(
+            analysis_result["template_context"],
+            generate_dto=generate_dto,
+            generate_vo=generate_vo,
+        )
         
         # Format response text
         result_text = f"Code Generation Analysis: {table_name}\n"
@@ -2099,6 +2128,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         include_swagger = arguments.get("include_swagger", True)
         include_lombok = arguments.get("include_lombok", True)
         include_mapstruct = arguments.get("include_mapstruct", True)
+        generate_dto = arguments.get("generate_dto")
+        generate_vo = arguments.get("generate_vo")
         project_path = arguments.get("project_path")
         output_dir_arg = arguments.get("output_dir")
         
@@ -2241,12 +2272,22 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                 ctx["hasJakarta"] = False
         except Exception:
             pass
-        
-        # ===== STEP 3: 生成代码 ===== 
+
+        from ..generator.template_context import apply_generation_options
+
+        apply_generation_options(
+            analysis_result["template_context"],
+            generate_dto=generate_dto,
+            generate_vo=generate_vo,
+        )
+
+        # ===== STEP 3: 生成代码 =====
         generation_config = {
             "author": author,
             "package_name": package_name,
-            "output_dir": output_dir_arg or "generated_output"
+            "output_dir": output_dir_arg or "generated_output",
+            "generate_dto": generate_dto,
+            "generate_vo": generate_vo,
         }
         
         generation_result = await generator.generate_code(

@@ -31,6 +31,7 @@ from mcp.types import Tool, TextContent
 from ..core.exceptions import DatabaseConnectionError, MCPServiceError
 from ..database.connection_manager import connection_manager
 from ..database.introspection import DatabaseIntrospector
+from ..generator.template_context import apply_generation_options
 from ..utils.json_serialization import dumps as _json_dumps
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,16 @@ def get_atomic_codegen_tools() -> List[Tool]:
                     "include_swagger": {"type": "boolean", "default": True},
                     "include_lombok": {"type": "boolean", "default": True},
                     "include_mapstruct": {"type": "boolean", "default": True},
+                    "generate_dto": {
+                        "type": "boolean",
+                        "description": "Generate a DTO artifact when the template category does not provide one",
+                        "default": False,
+                    },
+                    "generate_vo": {
+                        "type": "boolean",
+                        "description": "Generate a VO artifact",
+                        "default": False,
+                    },
                     "project_path": {
                         "type": "string",
                         "description": "Optional target Spring Boot project path",
@@ -237,6 +248,11 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
                 "useLombok": include_lombok,
                 "useMapStruct": include_mapstruct,
             }
+        )
+        apply_generation_options(
+            context,
+            generate_dto=arguments.get("generate_dto"),
+            generate_vo=arguments.get("generate_vo"),
         )
 
         # 重写包路径(尊重 package_suffix)
