@@ -175,6 +175,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
+.ci-smoke/
 config/local.yaml
 config/dev.yaml
 generated/

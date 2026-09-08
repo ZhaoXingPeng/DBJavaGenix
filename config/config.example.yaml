@@ -1,4 +1,6 @@
 # DBJavaGenix Configuration
+# Copy this file to config/local.yaml before adding local credentials.
+# Keep this tracked example limited to non-secret placeholder values.
 
 # Database connection settings
 database:
