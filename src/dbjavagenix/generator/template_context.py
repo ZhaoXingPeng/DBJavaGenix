@@ -275,6 +275,8 @@ class TemplateContextBuilder:
                 "javaType": self._map_java_type(pk_column.data_type),
                 "jdbcType": self._map_jdbc_type(pk_column.data_type),
                 "comment": pk_column.comment or pk_column.name,
+                "isAutoIncrement": pk_column.auto_increment,
+                "autoIncrement": pk_column.auto_increment,
             }
 
         return None

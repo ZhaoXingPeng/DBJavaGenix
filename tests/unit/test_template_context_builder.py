@@ -3,6 +3,8 @@
 聚焦命名转换、类型映射、上下文字典结构,不依赖项目根目录探测。
 """
 
+from pathlib import Path
+
 import pytest
 
 from dbjavagenix.core.models import ColumnInfo, DatabaseType, TableInfo
@@ -15,6 +17,7 @@ from dbjavagenix.generator.template_context import (
     TemplateConfigManager,
     TemplateContextBuilder,
 )
+from dbjavagenix.generator.mustache_engine import MustacheTemplateEngine
 from dbjavagenix.utils.pom_analyzer import PomAnalyzer, TechnologyStack
 
 
@@ -294,6 +297,59 @@ class TestBuildContextStructure:
         pk_cols = [c for c in ctx["columns"] if c["isPrimaryKey"]]
         assert len(pk_cols) == 1
         assert pk_cols[0]["javaName"] == "userId"
+
+    @pytest.mark.parametrize("auto_increment", [True, False])
+    def test_primary_key_context_preserves_auto_increment(self, builder, auto_increment):
+        table = TableInfo(
+            name="account",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="id",
+                    data_type="BIGINT",
+                    java_type="Long",
+                    primary_key=True,
+                    auto_increment=auto_increment,
+                )
+            ],
+            primary_keys=["id"],
+        )
+
+        primary_key = builder.build_context(table, "Default")["primaryKey"]
+
+        assert primary_key["isAutoIncrement"] is auto_increment
+        assert primary_key["autoIncrement"] is auto_increment
+
+    @pytest.mark.parametrize("auto_increment", [True, False])
+    def test_default_mapper_renders_auto_increment_key_option(self, builder, auto_increment):
+        table = TableInfo(
+            name="account",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="id",
+                    data_type="BIGINT",
+                    java_type="Long",
+                    primary_key=True,
+                    auto_increment=auto_increment,
+                )
+            ],
+            primary_keys=["id"],
+        )
+        context = builder.build_context(table, "Default")
+        template = (
+            Path(__file__).parents[2]
+            / "src"
+            / "dbjavagenix"
+            / "templates"
+            / "java"
+            / "Default"
+            / "mapper.mustache"
+        )
+
+        rendered = MustacheTemplateEngine().render_file(str(template), context)
+
+        assert ('useGeneratedKeys="true"' in rendered) is auto_increment
 
     def test_with_prefix_analysis_creates_suffix(self, builder, rbac_user_table):
         # 提供同前缀的表名集合,前缀分析器应识别出 sys 前缀
