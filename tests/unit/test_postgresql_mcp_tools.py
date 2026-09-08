@@ -221,6 +221,17 @@ async def test_table_exists_applies_postgresql_schema_filter_with_bound_paramete
 
 
 def test_postgresql_java_mapping_normalizes_catalog_type_names():
+    assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "time without time zone") == {
+        "java_type": "LocalTime",
+        "imports": ["java.time.LocalTime"],
+    }
+    assert mcp_tools._get_java_type_mapping(
+        DatabaseType.POSTGRESQL, "timestamp without time zone"
+    ) == {"java_type": "LocalDateTime", "imports": ["java.time.LocalDateTime"]}
+    assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "timestamptz") == {
+        "java_type": "OffsetDateTime",
+        "imports": ["java.time.OffsetDateTime"],
+    }
     assert mcp_tools._get_java_type_mapping(
         DatabaseType.POSTGRESQL, "timestamp with time zone"
     ) == {"java_type": "OffsetDateTime", "imports": ["java.time.OffsetDateTime"]}
