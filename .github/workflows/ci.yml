@@ -181,6 +181,37 @@ jobs:
       - name: Render every Java template
         run: uv run python scripts/verify_templates.py
 
+  java-compile:
+    name: Generated Java compile smoke
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install runtime dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip install -e "."
+
+      - name: Render and compile generated Java fixture
+        run: |
+          java --version
+          mvn --version
+          uv run python scripts/verify_java_compile.py
+
   docker:
     name: Docker image smoke test
     runs-on: ubuntu-latest
@@ -241,7 +272,7 @@ jobs:
   ci-success:
     name: Required CI status
     if: always()
-    needs: [metadata, quality, format, integration, templates, docker, package]
+    needs: [metadata, quality, format, integration, templates, java-compile, docker, package]
     runs-on: ubuntu-latest
     steps:
       - name: Fail when any required job failed or was cancelled
