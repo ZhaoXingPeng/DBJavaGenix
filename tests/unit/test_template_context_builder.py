@@ -379,6 +379,67 @@ class TestBuildContextStructure:
 
         assert ('useGeneratedKeys="true"' in rendered) is auto_increment
 
+    @pytest.mark.parametrize("auto_increment", [True, False])
+    def test_default_xml_mapper_gates_generated_key_options(self, builder, auto_increment):
+        table = TableInfo(
+            name="account",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="account_code",
+                    data_type="VARCHAR(32)",
+                    java_type="String",
+                    primary_key=True,
+                    auto_increment=auto_increment,
+                ),
+                ColumnInfo(name="display_name", data_type="VARCHAR(64)", java_type="String"),
+            ],
+            primary_keys=["account_code"],
+        )
+        context = builder.build_context(table, "Default")
+        template = (
+            Path(__file__).parents[2]
+            / "src"
+            / "dbjavagenix"
+            / "templates"
+            / "java"
+            / "Default"
+            / "mapper.xml.mustache"
+        )
+
+        rendered = MustacheTemplateEngine().render_file(str(template), context)
+        insert_lines = [line.strip() for line in rendered.splitlines() if "<insert id=" in line]
+
+        assert len(insert_lines) == 3
+        for line in insert_lines:
+            assert ('keyProperty="accountCode"' in line) is auto_increment
+            assert ('useGeneratedKeys="true"' in line) is auto_increment
+
+    def test_default_xml_mapper_without_primary_key_has_no_generated_key_options(self, builder):
+        table = TableInfo(
+            name="audit_log",
+            schema="public",
+            columns=[ColumnInfo(name="message", data_type="TEXT", java_type="String")],
+        )
+        context = builder.build_context(table, "Default")
+        template = (
+            Path(__file__).parents[2]
+            / "src"
+            / "dbjavagenix"
+            / "templates"
+            / "java"
+            / "Default"
+            / "mapper.xml.mustache"
+        )
+
+        rendered = MustacheTemplateEngine().render_file(str(template), context)
+        insert_lines = [line for line in rendered.splitlines() if "<insert id=" in line]
+
+        assert len(insert_lines) == 3
+        assert all(
+            "keyProperty" not in line and "useGeneratedKeys" not in line for line in insert_lines
+        )
+
     def test_with_prefix_analysis_creates_suffix(self, builder, rbac_user_table):
         # 提供同前缀的表名集合,前缀分析器应识别出 sys 前缀
         all_tables = ["sys_user", "sys_role", "sys_permission"]
