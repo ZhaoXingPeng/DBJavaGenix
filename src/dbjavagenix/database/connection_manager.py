@@ -216,6 +216,7 @@ class ConnectionManager:
         Raises:
             DatabaseQueryError: If query execution fails
         """
+        connection = None
         try:
             # SQLite defaults to an implicit transaction.  Keep its writes
             # durable at this boundary without changing the caller's SQL API.
@@ -244,6 +245,11 @@ class ConnectionManager:
                 return result
                     
         except Exception as e:
+            if isinstance(connection, sqlite3.Connection):
+                try:
+                    connection.rollback()
+                except Exception as rollback_error:
+                    logger.warning("SQLite rollback failed after query error: %s", rollback_error)
             logger.error(f"Query execution failed: {e}")
             raise DatabaseQueryError(f"Failed to execute query: {str(e)}")
     
