@@ -175,6 +175,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
+# Repository metadata files stay tracked; only local overrides and generated state are ignored.
 .ci-smoke/
 config/local.yaml
 config/dev.yaml
