@@ -9,27 +9,40 @@
 
 ## 当前基线
 
-基线随 `main` 更新；本次证据快照以 `7b07599`（PR #133 合并）为准，运行时代码
+基线随 `main` 更新；本次证据快照以 `f3b7741`（PR #142 合并）为准，运行时代码
 仍包含 `f885f57` 的 PostgreSQL schema 存在性修复：
 
 - 已支持 MySQL、PostgreSQL 和 SQLite 的连接、只读查询和统一元数据契约。
 - 已提供原子代码生成、schema 图算法、MCP Apps、AI 语义增强和基础可观测性。
-- `PYTHONPATH=src python -m pytest tests/unit/ -q`：668 passed（Windows 11、Python 3.10.1）。
+- `uv run --python 3.12 --extra dev python -m pytest tests/unit/ --no-cov -q`：680 passed
+  （Windows、Python 3.12.12、uv 0.9.17）。该数字是本快照的本地基线，不替代 CI 的
+  Python 3.11 / 3.12 / 3.13 矩阵。
 - SQLite 元数据基准已固定输入和查询次数；`describe_table` 当前每次包含 7 次 SQL 往返，其中第 7 次用于识别 `AUTOINCREMENT`。
 - CI 已用 Testcontainers 启动 MySQL 8.0 和 PostgreSQL 16-alpine。PR #133 通过真实
   `ConnectionManager -> DatabaseIntrospector.describe_table` 覆盖两方言的主键、外键、复合
   索引、NOT NULL 和自增语义；PostgreSQL 另以非 public schema 与 public 同名表验证显式
-  schema 隔离。容器化代码生成链路、SQLite 的集成级等价 fixture 和权限组合仍未覆盖。
+  schema 隔离。PR #136 继续在两个容器方言上执行
+  `ConnectionManager -> DatabaseIntrospector -> CodegenAnalyzer -> CodegenGenerator`，验证
+  `MybatisPlus-Mixed` 的 7 个内存文件均无 error；其最终 integration job 为 9 passed。
+  PR #138 补充了无需 Docker 的临时 SQLite 文件 fixture，覆盖同一 metadata 与 7 文件生成链路；
+  当前 #142 integration job 收集 10 项并为 10 passed、24 warnings、60.26s。上述结果不代表
+  生产权限/版本组合、SQLite 并发锁或所有真实驱动值类型已验证。
+- PR #140 使公共 `db_query_execute` 在执行前拒绝 `FOR SHARE`、`FOR KEY SHARE`、
+  `FOR [NO KEY] UPDATE` 与 `LOCK IN SHARE MODE` 等带锁 SELECT，并保留可 JSON 解析的错误
+  envelope。PR #142 使该工具的成功 Raw Response 可序列化 Decimal、日期时间、UUID、二进制
+  和 timedelta；其余 MCP handler 的历史 JSON 路径不因此视为已统一。
 - 当前没有可比较的真实 PostgreSQL/MySQL 延迟、吞吐或内存基准；任何后续 PR 必须先记录实验数据，再讨论优化结果。
 
 ### P0 进展记录
 
-- **真实数据库集成矩阵（进行中）**：#133 已完成 MySQL 8.0 / PostgreSQL 16-alpine 的最小
-  metadata contract 和 PostgreSQL schema 隔离回归。剩余验收项是将 SQLite 纳入同层级的
-  fixture 叙述、在容器数据库上验证代码生成输入/输出链路，以及记录权限和版本边界。
-- **查询与元数据契约收口（未立项）**：真实 metadata 查询已能暴露驱动参数化差异；#133
-  发现并修复了 psycopg2 中 `LIKE 'nextval(%%'` 的 literal-percent 转义。该成果不代表查询、空结果
-  和只读限制的完整跨方言合同已经完成。
+- **真实数据库集成矩阵（进行中）**：#133 完成 MySQL 8.0 / PostgreSQL 16-alpine 最小
+  metadata contract 和 PostgreSQL schema 隔离；#136 完成两容器方言到 7 文件内存生成；#138
+  完成 SQLite 文件 fixture 的等价路径。剩余验收项是生产权限/版本组合、SQLite 并发/文件锁边界，
+  以及与固定 Java fixture 分开的真实数据库生成项目编译证据。
+- **查询与元数据契约收口（进行中）**：#133 已修复 psycopg2 中
+  `LIKE 'nextval(%%'` 的 literal-percent 转义；#140 收紧无副作用 SELECT，#142 修复常见驱动
+  返回值的 Raw Response JSON 序列化。特殊标识符、空结果和表达式/复合键的更多真实跨方言组合、
+  未记录的锁语法、查询资源限制与其他 MCP handler 仍未形成完整合同。
 
 ## 优先级路线
 
@@ -39,8 +52,8 @@
 
 | 顺序 | 工作项 | 问题假设 | 验收证据 | 主要风险 |
 | --- | --- | --- | --- | --- |
-| 1 | 真实数据库集成矩阵 | 现有容器测试只证明 MySQL 连通性和 PostgreSQL 类型映射，无法发现完整工具链的驱动、权限和 catalog 差异 | 固定版本的 PostgreSQL、MySQL 容器和 SQLite fixture 均通过元数据契约、schema 隔离和代码生成 smoke test；记录镜像版本与命令 | Docker 不可用时只能运行明确标记的本地子集 |
-| 2 | 查询与元数据契约收口 | MCP 查询、存在性检查、描述和生成路径仍可能出现边界语义漂移 | 对 schema、复合键、表达式索引、特殊标识符、空结果和只读限制建立跨方言契约测试；Raw Response 全部可解析 | 厂商 SQL 差异需要限制在 introspector 或 dialect 边界 |
+| 1 | 真实数据库集成矩阵 | 当前固定 MySQL/PostgreSQL 容器与 SQLite 文件 fixture 已覆盖 metadata、schema 隔离和内存生成，但仍可能在权限、版本、并发和真实生成项目编译处漂移 | 记录权限/版本组合；在 SQLite 文件锁和代表性真实数据库生成项目上补充可复现实验 | Docker 不可用时只能运行明确标记的本地子集；本地 SQLite 不能替代服务器方言 |
+| 2 | 查询与元数据契约收口 | 锁定读和常见 driver 值已收口，但特殊标识符、空结果、表达式/复合键与未记录方言语法仍可能出现边界语义漂移 | 对 schema、复合键、表达式索引、特殊标识符、空结果和只读限制建立跨方言契约测试；按 handler 明确 Raw Response 序列化范围 | 厂商 SQL 差异需要限制在 introspector 或 dialect 边界 |
 | 3 | 生成代码编译 smoke test | 模板渲染成功不等于 Java 工程可编译 | 用固定 fixture 生成 Entity/DAO/Service/Controller/DTO/Mapper，使用 Java 21 与 Spring Boot 3.5 依赖完成至少一次离线编译验证 | 构建网络和第三方依赖版本必须可复现 |
 | 4 | 最终 CI 与发布门禁 | 当前质量检查分散，无法证明发布产物与源码一致 | 功能冻结后统一执行单测、集成测试、Ruff、模板检查、Java 编译、包构建、容器启动和安全扫描；产出可下载的版本工件 | CI 时长和外部服务失败需要缓存、重试和清晰降级 |
 
