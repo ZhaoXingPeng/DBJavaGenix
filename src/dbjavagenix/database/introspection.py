@@ -6,6 +6,7 @@ stays in this module so callers do not need to branch on vendor details.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import re
 from typing import Any, Dict, List
 
@@ -519,6 +520,12 @@ class DatabaseIntrospector:
         self, connection_id: str, table_name: str, schema: str | None = None
     ) -> Dict[str, Any]:
         """Return one normalized metadata document for a table."""
+        get_cached = getattr(self.connection_manager, "get_cached_metadata", None)
+        if callable(get_cached):
+            cached = get_cached(connection_id, table_name, schema)
+            if cached is not None:
+                return cached
+
         table = self.get_table(connection_id, table_name, schema)
         resolved_schema = schema or table.get("schema")
         columns = self.get_columns(connection_id, table_name, resolved_schema)
@@ -530,7 +537,7 @@ class DatabaseIntrospector:
             column["primary_key"] = (
                 column.get("primary_key", False) or column["name"] in primary_key_set
             )
-        return {
+        metadata = {
             "name": table["name"],
             "schema": resolved_schema,
             "comment": table.get("comment", ""),
@@ -541,3 +548,7 @@ class DatabaseIntrospector:
             "foreign_keys": foreign_keys,
             "indexes": indexes,
         }
+        cache_metadata = getattr(self.connection_manager, "cache_metadata", None)
+        if callable(cache_metadata):
+            cache_metadata(connection_id, table_name, schema, metadata)
+        return deepcopy(metadata)

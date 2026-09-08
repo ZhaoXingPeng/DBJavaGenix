@@ -80,7 +80,7 @@ def _percentile(samples: list[float], percentile: float) -> float:
 
 
 def run_benchmark(iterations: int = 30, warmup: int = 5) -> dict[str, Any]:
-    """Measure SQLite ``describe_table`` latency and SQL round trips."""
+    """Measure cold and warm SQLite ``describe_table`` latency and round trips."""
     if iterations < 1:
         raise ValueError("iterations must be at least 1")
     if warmup < 0:
@@ -100,10 +100,16 @@ def run_benchmark(iterations: int = 30, warmup: int = 5) -> dict[str, Any]:
     try:
         for _ in range(warmup):
             introspector.describe_table(connection_id, "orders")
+
+        manager.invalidate_metadata_cache(connection_id)
+        query_count = 0
+        cold_start = time.perf_counter()
+        metadata = introspector.describe_table(connection_id, "orders")
+        cold_ms = (time.perf_counter() - cold_start) * 1000
+        cold_queries = query_count
         query_count = 0
 
         samples: list[float] = []
-        metadata: dict[str, Any] = {}
         for _ in range(iterations):
             start = time.perf_counter()
             metadata = introspector.describe_table(connection_id, "orders")
@@ -118,7 +124,9 @@ def run_benchmark(iterations: int = 30, warmup: int = 5) -> dict[str, Any]:
             "columns": len(metadata["columns"]),
             "indexes": len(metadata["indexes"]),
             "foreign_keys": len(metadata["foreign_keys"]),
-            "queries_per_call": query_count / iterations,
+            "queries_per_call": cold_queries,
+            "warm_queries_per_call": query_count / iterations,
+            "cold_ms": cold_ms,
             "min_ms": min(samples),
             "median_ms": statistics.median(samples),
             "p95_ms": _percentile(samples, 0.95),
