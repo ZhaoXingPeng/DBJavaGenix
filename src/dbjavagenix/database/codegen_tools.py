@@ -101,6 +101,12 @@ class CodegenAnalyzer:
         # batch analysis so equally named tables cannot become ambiguous or overwrite
         # one another in the returned mapping.
         all_table_references = self.introspector.list_table_references(connection_id)
+        # Prefix analysis operates on bare table names.  Deduplicate names so
+        # PostgreSQL tables with the same name in different schemas do not
+        # inflate a prefix group's table count.
+        all_table_names = sorted(
+            {str(reference["name"]) for reference in all_table_references if reference.get("name")}
+        )
 
         def table_key(reference: Dict[str, str | None]) -> str:
             return (
@@ -123,7 +129,10 @@ class CodegenAnalyzer:
             result_key = table_key(reference)
             try:
                 analysis_results[result_key] = await self.analyze_table_for_codegen(
-                    connection_id, name, schema=schema
+                    connection_id,
+                    name,
+                    all_table_names=all_table_names,
+                    schema=schema,
                 )
             except Exception as exc:
                 analysis_results[result_key] = {"error": str(exc)}
