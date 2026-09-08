@@ -30,6 +30,7 @@ from mcp.types import Tool, TextContent
 
 from ..core.exceptions import DatabaseConnectionError, MCPServiceError
 from ..database.connection_manager import connection_manager
+from ..database.introspection import DatabaseIntrospector
 from ..utils.json_serialization import dumps as _json_dumps
 
 logger = logging.getLogger(__name__)
@@ -500,34 +501,12 @@ def _compute_file_path(
     return f"resources/{file_path}"
 
 
-def _collect_all_table_names(connection_id: str, config) -> List[str]:
+def _collect_all_table_names(connection_id: str, _config) -> List[str]:
     """收集库内所有表名(用于前缀分析)。失败时返回空列表。"""
     try:
-        conn = connection_manager.get_connection(connection_id)
-        cursor = conn.cursor()
-        try:
-            if config.type.name == "MYSQL":
-                cursor.execute("SHOW TABLES")
-                return [row[0] for row in cursor.fetchall()]
-            if config.type.name == "SQLITE":
-                cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                )
-                return [row[0] for row in cursor.fetchall()]
-            if config.type.name == "POSTGRESQL":
-                cursor.execute(
-                    "SELECT table_name FROM information_schema.tables "
-                    "WHERE table_catalog = current_database() "
-                    "AND table_type = 'BASE TABLE' "
-                    "AND table_schema NOT IN ('pg_catalog', 'information_schema') "
-                    "ORDER BY table_schema, table_name"
-                )
-                return [row[0] for row in cursor.fetchall()]
-            return []
-        finally:
-            cursor.close()
+        return DatabaseIntrospector(connection_manager).list_tables(connection_id)
     except Exception as e:  # noqa: BLE001
-        logger.warning(f"_collect_all_table_names failed: {e}")
+        logger.warning("_collect_all_table_names failed: %s", e)
         return []
 
 
