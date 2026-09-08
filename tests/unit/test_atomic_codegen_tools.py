@@ -413,8 +413,7 @@ class TestComputeFilePath:
             "package": "com.example.app",
         }
         path = _compute_file_path("entity.mustache", ctx, mapping)
-        assert "com/example/app" in path
-        assert path.endswith("SysUser.java")
+        assert path == "com/example/app/entity/SysUser.java"
 
     def test_xml_path_uses_resources_prefix(self):
         mapping = {"mapper.mustache": "mapper/{className}Dao.xml"}

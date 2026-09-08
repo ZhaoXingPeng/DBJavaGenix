@@ -306,6 +306,8 @@ class CodegenGenerator:
                 service_package = f"{package_name}.service.{package_suffix}"
                 entity_package = f"{package_name}.entity.{package_suffix}"
                 dao_package = f"{package_name}.dao.{package_suffix}"
+                dto_package = f"{package_name}.dto.{package_suffix}"
+                vo_package = f"{package_name}.vo.{package_suffix}"
                 # 修复serviceImpl包路径问题
                 service_impl_package = f"{package_name}.service.impl.{package_suffix}"
             else:
@@ -313,6 +315,8 @@ class CodegenGenerator:
                 service_package = f"{package_name}.service"
                 entity_package = f"{package_name}.entity"
                 dao_package = f"{package_name}.dao"
+                dto_package = f"{package_name}.dto"
+                vo_package = f"{package_name}.vo"
                 # 修复serviceImpl包路径问题
                 service_impl_package = f"{package_name}.service.impl"
 
@@ -327,6 +331,8 @@ class CodegenGenerator:
                     "servicePackage": service_package,
                     "entityPackage": entity_package,
                     "daoPackage": dao_package,
+                    "dtoPackage": dto_package,
+                    "voPackage": vo_package,
                     # 添加serviceImpl包路径
                     "serviceImplPackage": service_impl_package,
                     "author": author,
@@ -415,7 +421,7 @@ class CodegenGenerator:
                     path_parts = file_path.split("/")
                     if len(path_parts) > 1:
                         # 移除表名路径，让所有表共享同一个包结构
-                        relative_dir = "/".join(path_parts[:-1])
+                        relative_dir = "/".join(part for part in path_parts[:-1] if part)
                         filename = path_parts[-1]
                         # 构建带包路径的完整路径，不包含表名子包
                         return f"{package_path}/{relative_dir}/{filename}"

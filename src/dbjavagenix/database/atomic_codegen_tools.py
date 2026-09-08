@@ -500,7 +500,8 @@ def _compute_file_path(
     package_name = context.get("package", "com.example")
     package_path = package_name.replace(".", "/")
     if file_path.endswith(".java"):
-        return f"{package_path}/{file_path}"
+        normalized_path = "/".join(part for part in file_path.split("/") if part)
+        return f"{package_path}/{normalized_path}"
     return f"resources/{file_path}"
 
 

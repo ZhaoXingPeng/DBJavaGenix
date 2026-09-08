@@ -260,6 +260,51 @@ async def test_generator_does_not_require_unused_table_info(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("package_suffix", "expected_dto_package", "expected_vo_package"),
+    [
+        ("", "com.dbjavagenix.generated.dto", "com.dbjavagenix.generated.vo"),
+        (
+            "billing",
+            "com.dbjavagenix.generated.dto.billing",
+            "com.dbjavagenix.generated.vo.billing",
+        ),
+    ],
+)
+async def test_generator_rebuilds_dto_and_vo_packages_with_requested_base_package(
+    monkeypatch, package_suffix, expected_dto_package, expected_vo_package
+):
+    generator = CodegenGenerator()
+    rendered_contexts = []
+
+    async def render_template(template_file, context, _category):
+        rendered_contexts.append((template_file, context.copy()))
+        return "// generated"
+
+    monkeypatch.setattr(generator, "_render_template", render_template)
+    result = await generator.generate_code(
+        {
+            "table_name": "invoice",
+            "template_context": {
+                "className": "Invoice",
+                "package": "com.example",
+                "packageSuffix": package_suffix,
+            },
+        },
+        template_category="sb35-java21",
+        generation_config={"package_name": "com.dbjavagenix.generated"},
+    )
+
+    assert rendered_contexts
+    assert {context["dtoPackage"] for _, context in rendered_contexts} == {expected_dto_package}
+    assert {context["voPackage"] for _, context in rendered_contexts} == {expected_vo_package}
+    expected_suffix = f"/{package_suffix}" if package_suffix else ""
+    assert result["generated_code"]["dto.mustache"]["filename"] == (
+        f"com/dbjavagenix/generated/dto{expected_suffix}/InvoiceDTO.java"
+    )
+
+
+@pytest.mark.asyncio
 async def test_generator_loads_mybatis_plus_config_from_common_templates():
     code = await CodegenGenerator()._render_template(
         "mybatis_plus_config.mustache", {"basePackage": "com.example"}, "common"
