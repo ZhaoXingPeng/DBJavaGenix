@@ -183,6 +183,7 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 | [iteration-plan/](iteration-plan/) | 6 阶段重构方案 (目标架构 / 路线图 / 决策记录 / 演示故事) |
 | [docs/deployment.md](docs/deployment.md) | 部署模式 / 环境变量 / 健康检查 / 排障 |
 | [docs/benchmarks/token-usage.md](docs/benchmarks/token-usage.md) | tool schema token 测量 |
+| [docs/roadmap-v0.3.md](docs/roadmap-v0.3.md) | 功能冻结后的架构、集成、质量与发布收尾路线 |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | MCP Apps 4 组件客户端兼容性 |
 | [docs/algorithms-overview.md](docs/algorithms-overview.md) | v0.2.1 schema 图算法 (topo / cluster / cycle) |
 | [docs/design-patterns-catalog.md](docs/design-patterns-catalog.md) | 生成器与生成代码中的设计模式 |
@@ -202,11 +203,8 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 - [x] **v0.2.2**: MCP v3 + AI 工程化 (elicitation 表单 / sampling 借 LLM / 1h prompt caching / agentic-runner)
 
 下一步 (v0.3 候选):
-- DB 后端扩展: Oracle / SQL Server 元数据契约与驱动支持
-- 抓取 Claude Desktop / Cursor 截图入仓 (P3.5 收尾)
-- 集成测试: 用 Testcontainers 把 MySQL 拉起跑端到端
-- 性能: 把规则推断与 LLM 路径合并为同一返回 schema (current LLM 路径输出格式与规则略不同)
-- agentic-runner 加 subagent 支持 (Agent SDK 已就绪)
+- 完整优先级、前置条件和验收证据见 [`docs/roadmap-v0.3.md`](docs/roadmap-v0.3.md)。
+- 当前列表仅代表候选工作，不代表已实现或预先承诺的性能收益；CI 收尾安排在功能冻结之后。
 
 ## 启动模式
 
