@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dbjavagenix.core.models import DatabaseType
+from dbjavagenix.core.models import ColumnInfo, DatabaseType
 from dbjavagenix.database.codegen_tools import CodegenAnalyzer, CodegenGenerator
 from dbjavagenix.database.atomic_codegen_tools import get_atomic_codegen_tools
 from dbjavagenix.database.mcp_tools import get_codegen_tools
@@ -196,6 +196,27 @@ def test_table_analysis_keeps_column_metadata_typed():
     assert column["auto_increment"] is True
     assert column["precision"] is None
     assert column["scale"] is None
+
+
+def test_imports_needed_match_dialect_aware_template_imports():
+    analyzer = CodegenAnalyzer(object())
+    columns = [
+        ColumnInfo(
+            name="occurred_at",
+            data_type="TIMESTAMPTZ",
+            java_type="OffsetDateTime",
+        ),
+        ColumnInfo(
+            name="amount",
+            data_type="DECIMAL(12,2)",
+            java_type="BigDecimal",
+        ),
+    ]
+
+    assert analyzer._calculate_imports_needed(columns, DatabaseType.POSTGRESQL) == [
+        "java.math.BigDecimal",
+        "java.time.OffsetDateTime",
+    ]
 
 
 def test_codegen_entrypoints_expose_optional_schema():

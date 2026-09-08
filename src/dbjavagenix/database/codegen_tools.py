@@ -217,22 +217,8 @@ class CodegenAnalyzer:
     ) -> List[str]:
         """计算需要导入的类列表"""
         context_builder = TemplateContextBuilder(database_type=database_type)
-        imports = set()
-
-        for column in columns:
-            java_type = context_builder._map_java_type(column.data_type)
-
-            # 添加需要导入的类型
-            if java_type == "BigDecimal":
-                imports.add("java.math.BigDecimal")
-            elif java_type == "LocalDate":
-                imports.add("java.time.LocalDate")
-            elif java_type == "LocalTime":
-                imports.add("java.time.LocalTime")
-            elif java_type == "LocalDateTime":
-                imports.add("java.time.LocalDateTime")
-
-        return sorted(list(imports))
+        # Use the same dialect-aware import table as generated template context.
+        return context_builder._build_imports(columns, template_category="Default")
 
     def _map_java_type(
         self, database_type_name: str, database_type: DatabaseType = DatabaseType.MYSQL
