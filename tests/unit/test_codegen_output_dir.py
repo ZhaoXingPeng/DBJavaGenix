@@ -41,6 +41,42 @@ class _Connection:
         return _Cursor()
 
 
+def test_collect_codegen_table_names_uses_shared_introspector(monkeypatch):
+    calls = []
+
+    class Introspector:
+        def __init__(self, manager):
+            assert manager is mcp_tools.connection_manager
+
+        def list_tables(self, connection_id):
+            calls.append(connection_id)
+            return ["sys_user", "sys_role"]
+
+    monkeypatch.setattr(mcp_tools, "DatabaseIntrospector", Introspector)
+
+    assert mcp_tools._collect_codegen_table_names("pg-1", "sys_user") == [
+        "sys_user",
+        "sys_role",
+    ]
+    assert calls == ["pg-1"]
+
+
+def test_collect_codegen_table_names_falls_back_on_empty_or_error(monkeypatch):
+    class Introspector:
+        def __init__(self, manager):
+            pass
+
+        def list_tables(self, connection_id):
+            if connection_id == "empty":
+                return []
+            raise RuntimeError("metadata unavailable")
+
+    monkeypatch.setattr(mcp_tools, "DatabaseIntrospector", Introspector)
+
+    assert mcp_tools._collect_codegen_table_names("empty", "orders") == ["orders"]
+    assert mcp_tools._collect_codegen_table_names("broken", "orders") == ["orders"]
+
+
 @pytest.mark.asyncio
 async def test_codegen_generate_writes_to_explicit_output_dir(monkeypatch, tmp_path):
     project = tmp_path / "project"

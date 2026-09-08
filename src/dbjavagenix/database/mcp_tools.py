@@ -2170,28 +2170,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # ===== STEP 1: 获取数据库所有表名以支持前缀分析 =====
         logger.info("🔍 Getting all table names for package structure optimization...")
-        
-        # 获取数据库中的所有表名用于前缀分析
-        config = connection_manager.get_connection_info(connection_id)
-        connection = connection_manager.get_connection(connection_id)
-        cursor = connection.cursor()
-        
-        all_table_names = []
-        try:
-            if config.type.name == "MYSQL":
-                cursor.execute("SHOW TABLES")
-                all_table_names = [row[0] for row in cursor.fetchall()]
-            elif config.type.name == "SQLITE":
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-                all_table_names = [row[0] for row in cursor.fetchall()]
-            
-            logger.info(f"Found {len(all_table_names)} tables for prefix analysis: {all_table_names}")
-            
-        except Exception as e:
-            logger.warning(f"Failed to get all table names for prefix analysis: {e}")
-            all_table_names = [table_name]  # 至少包含当前表
-        finally:
-            cursor.close()
+        all_table_names = _collect_codegen_table_names(connection_id, table_name)
+        logger.info(f"Found {len(all_table_names)} tables for prefix analysis: {all_table_names}")
         
         # ===== STEP 2: 分析表结构（包含前缀优化） =====
         # Initialize analyzer and generator
@@ -2578,6 +2558,16 @@ def _detect_project_structure(project_path: Optional[str] = None) -> Dict[str, P
     """Resolve project structure from an explicit path or the current directory."""
     start_dir = Path(project_path).expanduser() if project_path else None
     return detect_springboot_project_structure(start_dir)
+
+
+def _collect_codegen_table_names(connection_id: str, fallback_table: str) -> List[str]:
+    """Collect table names through the shared introspection contract."""
+    try:
+        table_names = DatabaseIntrospector(connection_manager).list_tables(connection_id)
+        return table_names or [fallback_table]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to get all table names for prefix analysis: %s", exc)
+        return [fallback_table]
 
 
 def get_springboot_project_tools() -> List[Tool]:
