@@ -1,5 +1,7 @@
 """Regression tests for the public read-only SQL query tool."""
 
+import json
+
 import pytest
 
 from dbjavagenix.database import mcp_tools
@@ -32,6 +34,63 @@ async def test_db_query_execute_rejects_non_read_only_sql(monkeypatch, query):
 
     assert "Only" in response[0].text or "comments" in response[0].text
     assert called is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT id FROM users FOR UPDATE",
+        "SELECT id FROM users FOR SHARE",
+        "SELECT id FROM users FOR KEY SHARE",
+        "SELECT id FROM users FOR NO KEY UPDATE",
+        "SELECT id FROM users LOCK IN SHARE MODE",
+        "WITH locked_rows AS (SELECT id FROM users FOR SHARE) SELECT id FROM locked_rows",
+    ],
+)
+async def test_db_query_execute_rejects_locking_read_clauses(monkeypatch, query):
+    called = False
+
+    def execute_query(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr(mcp_tools.connection_manager, "execute_query", execute_query)
+
+    response = await mcp_tools.handle_db_query_execute({"connection_id": "test", "query": query})
+
+    payload = json.loads(response[0].text.split("Raw Response:", 1)[1].strip())
+    assert "non-locking" in response[0].text
+    assert payload["success"] is False
+    assert payload["error"] == "query_failed"
+    assert called is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT 1 AS share",
+        "SELECT 1 AS lock",
+        "SELECT 'LOCK IN SHARE MODE' AS note",
+    ],
+)
+async def test_db_query_execute_preserves_lock_words_in_aliases_and_literals(monkeypatch, query):
+    received = []
+
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda _connection_id, executed_query: received.append(executed_query) or [],
+    )
+
+    response = await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": query, "limit": 3}
+    )
+
+    assert "Query executed successfully" in response[0].text
+    assert received == [f"{query} LIMIT 3"]
 
 
 @pytest.mark.asyncio

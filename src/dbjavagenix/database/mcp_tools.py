@@ -44,6 +44,14 @@ _READ_ONLY_FORBIDDEN_WORDS = {
     "UPDATE",
 }
 
+_LOCKING_READ_CLAUSES = (
+    ("FOR", "UPDATE"),
+    ("FOR", "NO", "KEY", "UPDATE"),
+    ("FOR", "SHARE"),
+    ("FOR", "KEY", "SHARE"),
+    ("LOCK", "IN", "SHARE", "MODE"),
+)
+
 
 def _resolve_codegen_output_path(base_dir: Path, relative_path: object) -> Path:
     """Resolve a generated filename while keeping it inside its output directory."""
@@ -130,6 +138,19 @@ def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
     return tokens
 
 
+def _contains_locking_read_clause(tokens: List[tuple[str, str]]) -> bool:
+    """Return whether a token stream contains a row-locking SELECT clause."""
+    for clause in _LOCKING_READ_CLAUSES:
+        clause_length = len(clause)
+        for start in range(len(tokens) - clause_length + 1):
+            if all(
+                tokens[start + offset] == ("word", keyword)
+                for offset, keyword in enumerate(clause)
+            ):
+                return True
+    return False
+
+
 def _validate_read_only_query(query: Any) -> str:
     """Validate and normalize one SQL SELECT statement for the public query tool."""
     if not isinstance(query, str):
@@ -153,6 +174,9 @@ def _validate_read_only_query(query: Any) -> str:
     first_word = next((value for kind, value in tokens if kind == "word"), None)
     if first_word not in {"SELECT", "WITH"}:
         raise MCPServiceError("Only SELECT queries are allowed for security reasons")
+
+    if _contains_locking_read_clause(tokens):
+        raise MCPServiceError("Only non-locking read-only SELECT queries are allowed")
 
     depth = 0
     top_level_select = first_word == "SELECT"
