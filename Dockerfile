@@ -11,8 +11,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1
 
-# 编译某些原生扩展(如 psycopg2-binary 的依赖)需要的工具,
-# 在 builder 阶段一次性装上,运行镜像不带。
+# builder 阶段只保留解析和安装依赖所需的最小系统组件；
+# runtime 阶段不继承这些 apt 层，只复制已构建的虚拟环境和源码。
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
