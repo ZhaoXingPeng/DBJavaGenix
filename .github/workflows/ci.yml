@@ -37,6 +37,7 @@ jobs:
             python scripts/validate_commit_title.py \
               --title "$PR_TITLE" \
               --range "$PR_BASE_SHA..$PR_HEAD_SHA"
+            python scripts/validate_commit_title.py --pr-event "$GITHUB_EVENT_PATH"
           else
             python scripts/validate_commit_title.py \
               --title "$(git log -1 --format=%s "$COMMIT_SHA")"

@@ -32,6 +32,7 @@
 | [test_project依赖问题分析.md](test_project依赖问题分析.md) | 分析test_project中的依赖问题并提供修复建议 | 项目优化、依赖清理 |
 | [MCP服务测试提示词.md](MCP服务测试提示词.md) | MCP服务测试的提示词和使用指南 | MCP服务测试 |
 | [development.md](development.md) | 开发指南和常见问题解答 | 开发者、贡献者 |
+| [engineering-standards.md](engineering-standards.md) | Issue、PR、提交、回帖和质量门禁规范 | 维护者、贡献者 |
 | [mybatis依赖分析.md](mybatis依赖分析.md) | MyBatis相关依赖的详细分析 | MyBatis模板使用 |
 | [依赖分析.md](依赖分析.md) | 项目依赖分析和管理策略 | 依赖管理 |
 | [启动方式.md](启动方式.md) | 项目启动方式的详细说明 | 项目部署、运行 |

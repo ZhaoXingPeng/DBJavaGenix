@@ -3,6 +3,19 @@ description: 提议一项聚焦的改进
 title: ":sparkles: feat(module): 请填写功能摘要"
 labels: ["enhancement", "triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        标题使用 `:gitmoji: type(scope): 简短动作`，scope 为实际模块的小写 ASCII 名称。
+        全部正文使用 UTF-8；出现连续 `?` 时请先修复编码。不要包含凭据或生产数据。
+  - type: input
+    id: scope
+    attributes:
+      label: 主责任模块（scope）
+      description: 例如 mcp、generator、metadata、dialect、cli、ci 或 docs。
+      placeholder: generator
+    validations:
+      required: true
   - type: textarea
     id: problem
     attributes:
@@ -14,7 +27,7 @@ body:
     id: proposal
     attributes:
       label: 建议方案与非目标
-      description: 描述建议方案、明确不包含的内容，以及可能的替代方案。
+      description: 描述建议方案、受影响模块、明确不包含的内容，以及至少一个替代方案或拒绝理由。
     validations:
       required: true
   - type: textarea
@@ -30,8 +43,17 @@ body:
   - type: textarea
     id: architecture
     attributes:
-      label: 架构与兼容性
-      description: 受影响模块、API、数据格式、性能和迁移风险。
+      label: 架构、兼容性与测试计划
+      description: 说明 API/数据格式、迁移、性能风险，以及单元/集成/真实数据库或基准验证计划。
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: 非目标与风险
+      description: 写明不在本 Issue 范围内的工作、已知限制、回滚或后续事项。
+    validations:
+      required: true
   - type: checkboxes
     id: checks
     attributes:
