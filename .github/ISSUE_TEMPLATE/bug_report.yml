@@ -6,7 +6,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        请先搜索现有 Issue。安全漏洞请使用 SECURITY.md 中的私下报告流程。
+        请先搜索现有 Issue。标题使用 `:bug: fix(scope): 简短动作`，并使用 UTF-8；
+        出现连续 `?` 时请在提交前修复编码。安全漏洞请使用 SECURITY.md 中的私下报告流程。
+  - type: input
+    id: scope
+    attributes:
+      label: 受影响模块（scope）
+      description: 使用小写 ASCII 模块名，例如 mcp、metadata、generator、dialect 或 cli。
+      placeholder: metadata
+    validations:
+      required: true
   - type: input
     id: version
     attributes:
@@ -34,6 +43,24 @@ body:
     attributes:
       label: 环境信息
       description: Python、操作系统、数据库、安装方式和相关配置。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 写出可测试、可验证的修复完成条件。
+      placeholder: |
+        - [ ] 最小复现不再失败。
+        - [ ] 增加回归测试。
+        - [ ] 不影响 <兼容行为>。
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: 非目标、风险与安全信息
+      description: 明确不修改的范围、兼容性/回滚风险；不得填写 Token、密码或完整连接串。
     validations:
       required: true
   - type: checkboxes
