@@ -75,6 +75,9 @@ PYTHONPATH=src python scripts/verify_mcp_apps.py
 
 # 渲染并用 Java 21 / Maven 编译 sb35-java21 固定 fixture
 PYTHONPATH=src python scripts/verify_java_compile.py
+
+# 验证 npm tarball 只包含运行时文件，并保留 MCP stdout 边界
+npm run verify:package
 ```
 
 ### 6. 验证安装

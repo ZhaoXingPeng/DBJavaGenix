@@ -7,8 +7,17 @@
     "dbjavagenix-mcp": "./index.js"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "verify:package": "node scripts/verify_npm_package.js"
   },
+  "files": [
+    "index.js",
+    "src/dbjavagenix/**/*.py",
+    "src/dbjavagenix/**/*.mustache",
+    "src/dbjavagenix/config/*.yaml",
+    "pyproject.toml",
+    "requirements.txt"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ZhaoXingPeng/DBJavaGenix.git"
