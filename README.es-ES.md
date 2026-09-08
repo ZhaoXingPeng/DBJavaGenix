@@ -15,10 +15,11 @@ graph LR
     Skills[".claude/skills/<br/>java-codegen-from-db<br/>springboot-migration"]
     Skills -->|Llamada según necesidad| MCP
 
-    subgraph MCP[Servidor MCP 29 herramientas]
+    subgraph MCP[Servidor MCP 33 herramientas]
         direction TB
         DB[db_* conexión / consulta / descripción]
-        Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/mapper]
+        Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/dto/mapper]
+        Graph[schema_topo_order<br/>schema_cluster_tables<br/>schema_check_cycles]
         AI[ai_infer_business_names<br/>ai_recommend_template<br/>ai_summarize_schema]
         Vis[db_render_er_diagram]
         Obs[server_metrics / server_health<br/>ai_metrics / search_tools]
@@ -26,7 +27,7 @@ graph LR
 
     MCP -->|Retorna _meta| Apps[Renderizado MCP Apps]
     Apps -->|mermaid / dashboard / code-diff / tree| Client
-    MCP -->|Lee| Data[MySQL / SQLite + plantillas Mustache]
+    MCP -->|Lee| Data[MySQL / PostgreSQL / SQLite + plantillas Mustache]
 ```
 
 ## ¿Qué problema resuelve?
@@ -36,7 +37,7 @@ Generar ingeniería inversa de tablas de bases de datos a proyectos Spring Boot 
 | Dimensión | Herramientas antiguas | DBJavaGenix v0.2 |
 |------|--------|------------------|
 | ¿Quién define el flujo? | El usuario hace clic en paneles de configuración en el IDE | **Orquestación explícita mediante archivos Skill** (el LLM no llama erróneamente) |
-| Granularidad de llamada | Un solo botón hace todo de golpe | **6 herramientas atómicas** (build_context + 5 render_*), el LLM permite al usuario modificar el contexto para regenerar |
+| Granularidad de llamada | Un solo botón hace todo de golpe | **7 herramientas atómicas** (build_context + 6 render_*), el LLM permite al usuario modificar el contexto para regenerar |
 | Sobrecarga de inicio | (Plugin, residente) | Predeterminado ~3300 tok / modo progresivo **~985 tok** (ahorro del 70%) |
 | Nomenclatura | Mapeo mecánico de prefijos de tabla | **15 reglas + API de Claude**, identifica patrones RBAC/ecommerce/CMS |
 | Visualización de salida | Texto dentro del IDE | **MCP Apps**: Diagrama ER Mermaid / panel de dependencias / code-diff / árbol de estructura de paquetes |
@@ -95,7 +96,7 @@ En el cliente LLM, di "**Genera código Spring Boot a partir de las tres tablas 
 
 ### Fase 2: Capa de Skills y herramientas atómicas
 - `.claude/skills/java-codegen-from-db/SKILL.md` define explícitamente el flujo de trabajo de 5 fases
-- `db_codegen_generate` se divide en 6 herramientas atómicas, con contexto transferido explícitamente
+- `db_codegen_generate` se divide en 7 herramientas atómicas, con contexto transferido explícitamente
 - La herramienta `search_tools` implementa descubrimiento progresivo, ahorrando un 70.2% de tokens de inicio
 - Segunda Skill `springboot-migration` (lista de verificación de actualización 2.7→3.x)
 - [token usage benchmark](docs/benchmarks/token-usage.md)
@@ -125,13 +126,14 @@ En el cliente LLM, di "**Genera código Spring Boot a partir de las tres tablas 
 - Logs estructurados: `DBJAVAGENIX_LOG_FORMAT=json` permite salida de JSON en una sola línea, ideal para Loki/ELK
 - [Manual de despliegue](docs/deployment.md): 3 modos de despliegue + 6 escenarios de troubleshooting
 
-## Resumen de herramientas (29 en total)
+## Resumen de herramientas (33 en total)
 
 | Categoría | Herramienta |
 |------|------|
 | Conexión / Consulta | db_connect_test / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
 | Estructura de tabla | db_table_describe / db_table_columns / db_table_primary_keys / db_table_foreign_keys / db_table_indexes |
-| Generación de código (atómica) | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_mapper |
+| Algoritmos de grafo de schema | schema_topo_order / schema_cluster_tables / schema_check_cycles |
+| Generación de código (atómica) | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_dto / codegen_render_mapper |
 | Generación de código (legada) | db_codegen_analyze / db_codegen_generate |
 | Proyectos Spring Boot | springboot_validate_project / springboot_analyze_dependencies / springboot_read_config |
 | Visualización | db_render_er_diagram |
@@ -145,7 +147,7 @@ En el cliente LLM, di "**Genera código Spring Boot a partir de las tres tablas 
 |------|------------------|----------|----------------------|-----------------|
 | Motor de ejecución | LLM + MCP | Plugin para IDEA | Línea de comandos / Plugin Maven | Interfaz Web |
 | Orquestación de flujo | Skill explícita de 5 fases | Panel de configuración | Código único | Formulario |
-| Granularidad de herramienta | 6 atómicas (permite corrección intermedia) | Botón único | Comando único | Botón único |
+| Granularidad de herramienta | 7 atómicas (permite corrección intermedia) | Botón único | Comando único | Botón único |
 | Nomenclatura IA | ✅ 15 reglas + LLM opcional | ❌ Solo plantillas | ❌ | ❌ |
 | Extensión de plantillas | ✅ Mustache + 4 categorías (incluye sb35-java21) | ✅ Velocity | ⚠️ Solo MybatisPlus | ⚠️ Solo freemarker |
 | Renderizado de diagrama ER | ✅ Mermaid (MCP App) | ❌ | ❌ | ⚠️ Estático |
@@ -160,7 +162,7 @@ Consulta [`iteration-plan/01-target-architecture.md`](iteration-plan/01-target-a
 ```
 [ Capa Skills ]  Define "cómo hacerlo" — .claude/skills/*.md  Flujo de 5 fases explícito
        ↓
-[ Capa MCP ]     Proporciona "qué se puede hacer" — 29 herramientas atómicas  Contexto transferido explícitamente
+[ Capa MCP ]     Proporciona "qué se puede hacer" — 33 herramientas  Contexto transferido explícitamente
        ↓
 [ Capa Apps ]    Hace los resultados "visibles" — 4 componentes de UI (mermaid/dashboard/code-diff/tree)
 ```
@@ -177,6 +179,7 @@ Cada capa practica "contención de ingeniería":
 | [iteration-plan/](iteration-plan/) | Plan de refactorización en 6 fases (arquitectura objetivo / roadmap / registro de decisiones / historias de demostración) |
 | [docs/deployment.md](docs/deployment.md) | Modos de despliegue / Variables de entorno / Health check / Solución de problemas |
 | [docs/benchmarks/token-usage.md](docs/benchmarks/token-usage.md) | Medición de tokens del schema de herramientas |
+| [docs/roadmap-v0.3.md](docs/roadmap-v0.3.md) | Plan de cierre para arquitectura, integración, calidad y publicación |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | Compatibilidad del cliente con 4 componentes MCP Apps |
 | [docs/algorithms-overview.md](docs/algorithms-overview.md) | Algoritmos de gráficos de schema v0.2.1 (topo / cluster / cycle) |
 | [docs/design-patterns-catalog.md](docs/design-patterns-catalog.md) | Patrones de diseño en el generador y en el código generado |
@@ -195,12 +198,9 @@ Cada capa practica "contención de ingeniería":
 - [x] **v0.2.1**: Completado de ingeniería Java (3 algoritmos de schema / generador de configuración de estándares / catálogo de patrones)
 - [x] **v0.2.2**: MCP v3 + Ingeniería de IA (formularios de elicitation / sampling con LLM / caché de prompts 1h / agentic-runner)
 
-Próximos pasos (candidato v0.3):
-- Expansión de backend DB: soporte completo para PostgreSQL / Oracle
-- Captura de capturas de pantalla de Claude Desktop / Cursor al repositorio (cierre de P3.5)
-- Pruebas de integración: levantar MySQL con Testcontainers para ejecutar end-to-end
-- Rendimiento: fusionar la inferencia de reglas y la ruta de LLM en un mismo schema de retorno (el formato actual de la ruta LLM difiere ligeramente de las reglas)
-- Agregar soporte para subagentes en agentic-runner (SDK de Agent ya está listo)
+Próximos pasos (v0.3):
+- Las prioridades, requisitos previos y evidencias de aceptación se mantienen en [`docs/roadmap-v0.3.md`](docs/roadmap-v0.3.md).
+- La lista describe candidatos; no comunica mejoras de rendimiento ni soporte de base de datos no verificados.
 
 ## Modos de inicio
 

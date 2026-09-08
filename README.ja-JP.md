@@ -13,10 +13,11 @@ graph LR
     Skills[".claude/skills/<br/>java-codegen-from-db<br/>springboot-migration"]
     Skills -->|必要に応じて呼び出し| MCP
 
-    subgraph MCP[MCP Server 29 ツール]
+    subgraph MCP[MCP Server 33 ツール]
         direction TB
         DB[db_* 接続 / クエリ / 説明]
-        Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/mapper]
+        Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/dto/mapper]
+        Graph[schema_topo_order<br/>schema_cluster_tables<br/>schema_check_cycles]
         AI[ai_infer_business_names<br/>ai_recommend_template<br/>ai_summarize_schema]
         Vis[db_render_er_diagram]
         Obs[server_metrics / server_health<br/>ai_metrics / search_tools]
@@ -24,7 +25,7 @@ graph LR
 
     MCP -->|_meta を返却| Apps[MCP Apps レンダリング]
     Apps -->|mermaid / dashboard / code-diff / tree| Client
-    MCP -->|読み込み| Data[MySQL / SQLite + Mustache テンプレート]
+    MCP -->|読み込み| Data[MySQL / PostgreSQL / SQLite + Mustache テンプレート]
 ```
 
 ## 解決する課題
@@ -34,7 +35,7 @@ graph LR
 | 観点 | 従来のツール | DBJavaGenix v0.2 |
 |------|-------------|------------------|
 | ワークフローの定義者 | IDE の設定画面をユーザーが操作 | **Skill ファイルで明示的に編成**（LLM の誤呼び出しを防止） |
-| 呼び出し単位 | 1 つのボタンですべてを一括実行 | **6 つのアトミックツール**（build_context + 5 つの render_*）。途中で context を修正して再生成可能 |
+| 呼び出し単位 | 1 つのボタンですべてを一括実行 | **7 つのアトミックツール**（build_context + 6 つの render_*）。途中で context を修正して再生成可能 |
 | 起動コスト | プラグインを常駐 | 通常約 3,300 tok / Progressive モード **約 985 tok**（70% 削減） |
 | 命名 | テーブル接頭辞の機械的な変換 | **15 のルール + Claude API** で RBAC / EC / CMS パターンを認識 |
 | 出力の可視化 | IDE 内のテキスト | **MCP Apps**: Mermaid ER 図 / 依存関係ダッシュボード / code-diff / パッケージツリー |
@@ -96,7 +97,7 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 ### Phase 2: Skills 層とアトミックツール
 
 - `.claude/skills/java-codegen-from-db/SKILL.md` が 5 段階のワークフローを明示
-- `db_codegen_generate` を 6 つのアトミックツールへ分割し、context を明示的に受け渡し
+- `db_codegen_generate` を 7 つのアトミックツールへ分割し、context を明示的に受け渡し
 - `search_tools` が Progressive Discovery を実装し、起動時のトークンを 70.2% 削減
 - 2 つ目の Skill `springboot-migration`（2.7 → 3.x 移行チェックリスト）
 - [トークン使用量ベンチマーク](docs/benchmarks/token-usage.md)
@@ -129,13 +130,14 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 - 構造化ログ: `DBJAVAGENIX_LOG_FORMAT=json` で Loki / ELK に適した 1 行 JSON を出力
 - [デプロイガイド](docs/deployment.md): 3 つのデプロイ方式 + 6 つのトラブルシューティング事例
 
-## ツール一覧（29 個）
+## ツール一覧（33 個）
 
 | カテゴリ | ツール |
 |------|------|
 | 接続 / クエリ | db_connect_test / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
 | テーブル構造 | db_table_describe / db_table_columns / db_table_primary_keys / db_table_foreign_keys / db_table_indexes |
-| コード生成（アトミック） | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_mapper |
+| スキーマグラフアルゴリズム | schema_topo_order / schema_cluster_tables / schema_check_cycles |
+| コード生成（アトミック） | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_dto / codegen_render_mapper |
 | コード生成（レガシー） | db_codegen_analyze / db_codegen_generate |
 | Spring Boot プロジェクト | springboot_validate_project / springboot_analyze_dependencies / springboot_read_config |
 | 可視化 | db_render_er_diagram |
@@ -149,7 +151,7 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 |------|------------------|----------|----------------------|-----------------|
 | 実行方式 | LLM + MCP | IDEA プラグイン | CLI / Maven plugin | Web UI |
 | ワークフロー編成 | 5 段階の明示的な Skill | 設定画面 | 一括生成 | フォーム |
-| ツール粒度 | 6 つのアトミックツール（途中修正可能） | 1 ボタン | 1 コマンド | 1 ボタン |
+| ツール粒度 | 7 つのアトミックツール（途中修正可能） | 1 ボタン | 1 コマンド | 1 ボタン |
 | AI 命名 | ✅ 15 ルール + オプション LLM | ❌ テンプレートのみ | ❌ | ❌ |
 | テンプレート拡張 | ✅ Mustache + 4 カテゴリ（sb35-java21 を含む） | ✅ Velocity | ⚠️ MybatisPlus のみ | ⚠️ freemarker のみ |
 | ER 図の描画 | ✅ Mermaid（MCP App） | ❌ | ❌ | ⚠️ 静的 |
@@ -164,7 +166,7 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 ```
 [ Skills 層 ]  「方法」を定義 — .claude/skills/*.md  明示的な 5 段階ワークフロー
        ↓
-[ MCP 層 ]     「できること」を提供 — 29 のアトミックツール  context を明示的に受け渡し
+[ MCP 層 ]     「できること」を提供 — 33 ツール  context を明示的に受け渡し
        ↓
 [ Apps 層 ]    結果を「見える化」 — 4 つの UI コンポーネント（mermaid/dashboard/code-diff/tree）
 ```
@@ -182,6 +184,7 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 | [iteration-plan/](iteration-plan/) | 6 段階のリファクタリング計画（目標アーキテクチャ / ロードマップ / 意思決定記録 / デモストーリー） |
 | [docs/deployment.md](docs/deployment.md) | デプロイ方式 / 環境変数 / ヘルスチェック / トラブルシューティング |
 | [docs/benchmarks/token-usage.md](docs/benchmarks/token-usage.md) | ツールスキーマのトークン測定 |
+| [docs/roadmap-v0.3.md](docs/roadmap-v0.3.md) | アーキテクチャ、統合、品質、リリースの収束計画 |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | 4 つの MCP Apps コンポーネントのクライアント互換性 |
 | [docs/algorithms-overview.md](docs/algorithms-overview.md) | v0.2.1 スキーマグラフアルゴリズム（topo / cluster / cycle） |
 | [docs/design-patterns-catalog.md](docs/design-patterns-catalog.md) | ジェネレーターと生成コードのデザインパターン |
@@ -202,11 +205,8 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 
 次の候補（v0.3）:
 
-- DB バックエンドの拡張: PostgreSQL / Oracle の完全サポート
-- Claude Desktop / Cursor のスクリーンショットをリポジトリに追加（P3.5 の仕上げ）
-- 統合テスト: Testcontainers で MySQL を起動し、エンドツーエンドで実行
-- パフォーマンス: ルール推論と LLM 経路の返却 schema を統一
-- agentic-runner のサブエージェント対応（Agent SDK は準備済み）
+- 優先順位、前提条件、受け入れ証拠は [`docs/roadmap-v0.3.md`](docs/roadmap-v0.3.md) で管理します。
+- この一覧は候補であり、未検証の性能改善やデータベース対応を表明するものではありません。
 
 ## 起動モード
 

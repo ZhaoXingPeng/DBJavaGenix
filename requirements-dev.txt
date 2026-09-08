@@ -1,4 +1,5 @@
 # DBJavaGenix 开发环境依赖
+# `pyproject.toml` 是规范依赖入口；本文件保留给使用 pip 的开发环境。
 
 -r requirements.txt
 

@@ -21,6 +21,9 @@ uv pip install -e ".[dev]"
 PYTHONPATH=src uv run pytest tests/unit/ -q
 uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
+
+# 验证 sb35-java21 模板的代表性 Maven 编译路径（需要 Java 21 与 Maven）
+PYTHONPATH=src uv run python scripts/verify_java_compile.py
 ```
 
 数据库集成测试需要显式配置 `DBJAVAGENIX_TEST_*` 环境变量，详见 [`tests/README.md`](tests/README.md)。

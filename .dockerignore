@@ -34,7 +34,7 @@ venv
 .vscode
 *.swp
 
-# Node (npm wrapper 不进运行镜像)
+# Node（运行镜像直接启动 Python CLI，npm wrapper 不进入构建上下文）
 node_modules
 package*.json
 index.js

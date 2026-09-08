@@ -1,7 +1,7 @@
 {
   "name": "dbjavagenix-mcp-server",
   "version": "0.1.1",
-  "description": "DBJavaGenix MCP Server (Node wrapper around the Python backend). For containerized usage prefer the Docker image.",
+  "description": "Node.js stdio wrapper for the DBJavaGenix Python MCP server. For containerized usage prefer the Docker image.",
   "main": "index.js",
   "bin": {
     "dbjavagenix-mcp": "./index.js"

@@ -10,6 +10,7 @@ authors = [
     {name = "ZXP", email = "2638265504@qq.com"}
 ]
 readme = "README.md"
+# Package metadata remains in this file; requirements-dev.txt supports pip-only workflows.
 license = {text = "MIT"}
 requires-python = ">=3.11"
 keywords = ["mcp", "code-generation", "java", "database", "ai", "skills", "mcp-apps"]
