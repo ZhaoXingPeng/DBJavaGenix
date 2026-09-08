@@ -72,6 +72,9 @@ PYTHONPATH=src python -m pytest tests/integration/ -q
 # 运行模板和 MCP Apps 验证脚本
 PYTHONPATH=src python scripts/verify_templates.py
 PYTHONPATH=src python scripts/verify_mcp_apps.py
+
+# 渲染并用 Java 21 / Maven 编译 sb35-java21 固定 fixture
+PYTHONPATH=src python scripts/verify_java_compile.py
 ```
 
 ### 6. 验证安装
