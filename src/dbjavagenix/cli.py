@@ -73,20 +73,23 @@ def _codegen_result_succeeded(result: Optional[dict]) -> bool:
     return bool(result.get("success") or "Code Generation Complete:" in result.get("error", ""))
 
 
-def show_ascii_icon():
+def show_ascii_icon(output: Optional[Console] = None):
     """Display the DBJavaGenix ASCII icon"""
+    target_console = output if output is not None else console
     icon_path = Path(__file__).parent.parent / "config" / "ASCII_ICON.txt"
     try:
         if icon_path.exists():
             with open(icon_path, "r", encoding="utf-8") as f:
                 icon_content = f.read()
-            console.print(f"[bold cyan]{icon_content}[/bold cyan]")
-            console.print("[dim]AI-Enhanced Java Code Generator v0.1.0[/dim]")
-            console.print("[dim]Author: ZXP | Email: 2638265504@qq.com[/dim]\n")
+            target_console.print(f"[bold cyan]{icon_content}[/bold cyan]")
+            target_console.print("[dim]AI-Enhanced Java Code Generator v0.1.0[/dim]")
+            target_console.print("[dim]Author: ZXP | Email: 2638265504@qq.com[/dim]\n")
         else:
-            console.print("[bold cyan]DBJavaGenix - AI-Enhanced Java Code Generator[/bold cyan]")
+            target_console.print(
+                "[bold cyan]DBJavaGenix - AI-Enhanced Java Code Generator[/bold cyan]"
+            )
     except Exception:
-        console.print("[bold cyan]DBJavaGenix - AI-Enhanced Java Code Generator[/bold cyan]")
+        target_console.print("[bold cyan]DBJavaGenix - AI-Enhanced Java Code Generator[/bold cyan]")
 
 
 @app.command()
@@ -756,23 +759,26 @@ def server(
     ),
 ):
     """Start MCP server for LLM integration"""
-    show_ascii_icon()
+    server_console = Console(stderr=True)
+    show_ascii_icon(server_console)
     try:
-        console.print("[bold blue]Starting DBJavaGenix MCP Server...[/bold blue]")
+        server_console.print("[bold blue]Starting DBJavaGenix MCP Server...[/bold blue]")
 
         # MCP服务器无需配置文件即可启动
         if config_path:
-            console.print(f"[dim]Using configuration file: {config_path}[/dim]")
+            server_console.print(f"[dim]Using configuration file: {config_path}[/dim]")
             try:
                 config_manager = ConfigManager(config_path)
                 config = config_manager.load_config()
-                console.print("[green]✓[/green] Configuration loaded")
+                server_console.print("[green]✓[/green] Configuration loaded")
             except Exception as e:
-                console.print(f"[yellow]Warning: Failed to load config file: {e}[/yellow]")
-                console.print("[yellow]Continuing with dynamic configuration mode...[/yellow]")
+                server_console.print(f"[yellow]Warning: Failed to load config file: {e}[/yellow]")
+                server_console.print(
+                    "[yellow]Continuing with dynamic configuration mode...[/yellow]"
+                )
         else:
-            console.print("[cyan]Running in zero-configuration mode![/cyan]")
-            console.print("[dim]All configuration will be provided dynamically by LLM[/dim]")
+            server_console.print("[cyan]Running in zero-configuration mode![/cyan]")
+            server_console.print("[dim]All configuration will be provided dynamically by LLM[/dim]")
 
         # Dynamically compute tool counts and show names for clarity
         try:
@@ -782,38 +788,40 @@ def server(
             spring_tools = get_springboot_project_tools()
             total = len(conn_tools) + len(table_tools) + len(code_tools) + len(spring_tools)
 
-            console.print("\n[cyan]MCP Server Capabilities:[/cyan]")
-            console.print(f"- Database connection tools ({len(conn_tools)} tools)")
-            console.print(f"- Table structure analysis tools ({len(table_tools)} tools)")
-            console.print(f"- Java code generation tools ({len(code_tools)} tools)")
-            console.print(f"- Spring Boot project tools ({len(spring_tools)} tools)")
+            server_console.print("\n[cyan]MCP Server Capabilities:[/cyan]")
+            server_console.print(f"- Database connection tools ({len(conn_tools)} tools)")
+            server_console.print(f"- Table structure analysis tools ({len(table_tools)} tools)")
+            server_console.print(f"- Java code generation tools ({len(code_tools)} tools)")
+            server_console.print(f"- Spring Boot project tools ({len(spring_tools)} tools)")
             # List Spring Boot tools explicitly (includes springboot_read_config)
             spring_names = ", ".join(t.name for t in spring_tools)
-            console.print(f"  [dim]Spring Boot: {spring_names}[/dim]")
-            console.print(f"\n[green]Total: {total} MCP tools available[/green]")
+            server_console.print(f"  [dim]Spring Boot: {spring_names}[/dim]")
+            server_console.print(f"\n[green]Total: {total} MCP tools available[/green]")
         except Exception:
             # Fallback to a generic message if dynamic loading fails
-            console.print("\n[cyan]MCP Server Capabilities:[/cyan]")
-            console.print("- Database connection tools")
-            console.print("- Table structure analysis tools")
-            console.print("- Java code generation tools")
-            console.print("- Spring Boot project tools")
+            server_console.print("\n[cyan]MCP Server Capabilities:[/cyan]")
+            server_console.print("- Database connection tools")
+            server_console.print("- Table structure analysis tools")
+            server_console.print("- Java code generation tools")
+            server_console.print("- Spring Boot project tools")
 
-        console.print("\n[bold green]Starting MCP server in stdio mode...[/bold green]")
-        console.print("[dim]Server ready for LLM integration (no manual interaction needed)[/dim]")
-        console.print("[dim]Press Ctrl+C to stop the server[/dim]")
+        server_console.print("\n[bold green]Starting MCP server in stdio mode...[/bold green]")
+        server_console.print(
+            "[dim]Server ready for LLM integration (no manual interaction needed)[/dim]"
+        )
+        server_console.print("[dim]Press Ctrl+C to stop the server[/dim]")
 
         # 启动 MCP 服务器
         try:
             asyncio.run(run_server())
         except KeyboardInterrupt:
-            console.print("\n[yellow]Shutting down server...[/yellow]")
+            server_console.print("\n[yellow]Shutting down server...[/yellow]")
         except Exception as e:
-            console.print(f"\n[red]Server error: {e}[/red]")
+            server_console.print(f"\n[red]Server error: {e}[/red]")
             raise typer.Exit(1)
 
     except Exception as e:
-        console.print(f"[red]Unexpected error: {e}[/red]")
+        server_console.print(f"[red]Unexpected error: {e}[/red]")
         raise typer.Exit(1)
 
 
