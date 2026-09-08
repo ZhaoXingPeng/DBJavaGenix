@@ -94,6 +94,118 @@ async def test_db_query_execute_preserves_lock_words_in_aliases_and_literals(mon
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT $$LIMIT 99; UPDATE users SET name = 'x'$$ AS body",
+        "SELECT $tag$FOR SHARE; (nested)$tag$ AS body",
+    ],
+)
+async def test_db_query_execute_ignores_keywords_inside_dollar_quoted_literals(monkeypatch, query):
+    received = []
+
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda _connection_id, executed_query: received.append(executed_query) or [],
+    )
+
+    response = await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": query, "limit": 3}
+    )
+
+    assert "Query executed successfully" in response[0].text
+    assert received == [f"{query} LIMIT 3"]
+
+
+@pytest.mark.asyncio
+async def test_db_query_execute_rejects_unterminated_dollar_quoted_literal(monkeypatch):
+    called = False
+
+    def execute_query(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr(mcp_tools.connection_manager, "execute_query", execute_query)
+
+    response = await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": "SELECT $tag$missing", "limit": 3}
+    )
+
+    assert "Unterminated dollar-quoted" in response[0].text
+    assert called is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        (
+            "SELECT id FROM users FETCH FIRST 100 ROWS ONLY",
+            "SELECT id FROM users FETCH FIRST 3 ROWS ONLY",
+        ),
+        (
+            "SELECT id FROM users FETCH NEXT 2 ROW ONLY",
+            "SELECT id FROM users FETCH NEXT 2 ROW ONLY",
+        ),
+        (
+            "SELECT * FROM (SELECT id FROM users FETCH FIRST 100 ROWS ONLY) AS rows",
+            "SELECT * FROM (SELECT id FROM users FETCH FIRST 100 ROWS ONLY) AS rows LIMIT 3",
+        ),
+    ],
+)
+async def test_db_query_execute_applies_limit_to_top_level_fetch(monkeypatch, query, expected):
+    received = []
+
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "execute_query",
+        lambda _connection_id, executed_query: received.append(executed_query) or [],
+    )
+
+    response = await mcp_tools.handle_db_query_execute(
+        {"connection_id": "test", "query": query, "limit": 3}
+    )
+
+    assert "Query executed successfully" in response[0].text
+    assert received == [expected]
+
+
+@pytest.mark.asyncio
+async def test_db_query_execute_rejects_fetch_with_ties_before_execution(monkeypatch):
+    called = False
+
+    def execute_query(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr(mcp_tools.connection_manager, "execute_query", execute_query)
+
+    response = await mcp_tools.handle_db_query_execute(
+        {
+            "connection_id": "test",
+            "query": "SELECT id FROM users FETCH FIRST 10 ROWS WITH TIES",
+            "limit": 3,
+        }
+    )
+
+    assert "FETCH WITH TIES" in response[0].text
+    assert called is False
+
+
+def test_has_top_level_limit_clause_matches_supported_fetch_forms():
+    assert mcp_tools._has_top_level_limit_clause("SELECT 1 FETCH FIRST 2 ROWS ONLY") is True
+    assert (
+        mcp_tools._has_top_level_limit_clause(
+            "SELECT * FROM (SELECT 1 FETCH FIRST 2 ROWS ONLY) AS rows"
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
 async def test_db_query_execute_accepts_cte_and_trailing_semicolon(monkeypatch):
     received = []
 
