@@ -381,7 +381,7 @@ class CodegenGenerator:
         template_base_path = Path(__file__).parent.parent / "templates" / "java"
 
         if category == "common":
-            template_path = template_base_path / template_file
+            template_path = template_base_path / "common" / template_file
         else:
             template_path = template_base_path / category / template_file
 

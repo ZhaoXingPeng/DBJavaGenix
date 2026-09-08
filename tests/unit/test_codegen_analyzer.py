@@ -257,3 +257,13 @@ async def test_generator_does_not_require_unused_table_info(monkeypatch):
         "success_files": 6,
         "error_files": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_generator_loads_mybatis_plus_config_from_common_templates():
+    code = await CodegenGenerator()._render_template(
+        "mybatis_plus_config.mustache", {"basePackage": "com.example"}, "common"
+    )
+
+    assert "package com.example.config;" in code
+    assert "class MybatisPlusConfig" in code
