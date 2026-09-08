@@ -72,6 +72,7 @@ from ..database.schema_algorithms_tools import (
 from ..utils.metrics import GLOBAL_TOOL_METRICS
 from ..utils.security import redact_sensitive_data, redact_sensitive_text
 from ..utils.logging_config import configure_logging
+from ..utils.json_serialization import dumps as _json_dumps
 from ..utils.tool_registry import filter_tools_for_listing
 
 # Configure logging (P5.2: plain / json via DBJAVAGENIX_LOG_FORMAT)
@@ -140,7 +141,7 @@ def _tool_error_response(tool_name: str, error_code: str, error: object) -> list
         "tool": tool_name,
         "message": redact_sensitive_text(error),
     }
-    return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))]
+    return [TextContent(type="text", text=_json_dumps(payload))]
 
 
 def _result_reports_error(result: Sequence[Any]) -> bool:

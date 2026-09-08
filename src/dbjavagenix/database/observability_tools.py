@@ -2,7 +2,6 @@
 P5: 可观测性工具 - server_metrics + server_health。
 """
 
-import json
 import os
 import platform
 import sys
@@ -12,6 +11,7 @@ from typing import Any, Dict, List
 from mcp.types import TextContent, Tool
 
 from ..utils.metrics import GLOBAL_TOOL_METRICS
+from ..utils.json_serialization import dumps as _json_dumps
 
 
 def get_observability_tools() -> List[Tool]:
@@ -62,10 +62,12 @@ async def handle_server_metrics(arguments: Dict[str, Any]) -> List[TextContent]:
     if arguments.get("reset"):
         GLOBAL_TOOL_METRICS.reset()
         payload["reset"] = True
-    return [TextContent(
-        type="text",
-        text=json.dumps(payload, ensure_ascii=False, indent=2),
-    )]
+    return [
+        TextContent(
+            type="text",
+            text=_json_dumps(payload, indent=2),
+        )
+    ]
 
 
 async def handle_server_health(arguments: Dict[str, Any]) -> List[TextContent]:
@@ -92,18 +94,21 @@ async def handle_server_health(arguments: Dict[str, Any]) -> List[TextContent]:
 
     try:
         import mcp
+
         mcp_version = getattr(mcp, "__version__", "unknown")
     except Exception:  # noqa: BLE001
         mcp_version = "unknown"
 
     try:
         from ..database.connection_manager import connection_manager
+
         active_connections = len(connection_manager.list_connections())
     except Exception:  # noqa: BLE001
         active_connections = -1  # not initialized
 
     try:
         import anthropic
+
         anthropic_version = getattr(anthropic, "__version__", "installed")
     except ImportError:
         anthropic_version = "not_installed"
@@ -127,20 +132,25 @@ async def handle_server_health(arguments: Dict[str, Any]) -> List[TextContent]:
             "active_connections": active_connections,
         },
         "ai": {
-            "llm_available": bool(os.environ.get("ANTHROPIC_API_KEY")) and anthropic_version != "not_installed",
-            "progressive_mode": os.environ.get("DBJAVAGENIX_PROGRESSIVE", "").lower() in ("1", "true", "yes", "on"),
+            "llm_available": bool(os.environ.get("ANTHROPIC_API_KEY"))
+            and anthropic_version != "not_installed",
+            "progressive_mode": os.environ.get("DBJAVAGENIX_PROGRESSIVE", "").lower()
+            in ("1", "true", "yes", "on"),
         },
     }
-    return [TextContent(
-        type="text",
-        text=json.dumps(health, ensure_ascii=False, indent=2),
-    )]
+    return [
+        TextContent(
+            type="text",
+            text=_json_dumps(health, indent=2),
+        )
+    ]
 
 
 def _read_version() -> str:
     """从 dbjavagenix.__init__ 读取版本"""
     try:
         import dbjavagenix
+
         return getattr(dbjavagenix, "__version__", "0.2.0")
     except Exception:  # noqa: BLE001
         return "0.2.0"

@@ -10,7 +10,6 @@ through another tool with explicit user confirmation).
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from mcp.types import TextContent, Tool
@@ -22,6 +21,7 @@ from ..standards import (
     generate_spotbugs_exclude_xml,
     generate_suppressions_xml,
 )
+from ..utils.json_serialization import dumps as _json_dumps
 
 
 STANDARDS_GENERATE_TOOL = Tool(
@@ -103,9 +103,7 @@ async def handle_generate_quality_configs(
             {
                 "path": _FILE_PATHS["checkstyle"],
                 "language": "xml",
-                "content": generate_checkstyle_xml(
-                    line_limit=line_limit, indent=indent
-                ),
+                "content": generate_checkstyle_xml(line_limit=line_limit, indent=indent),
             }
         )
     if "checkstyle_suppressions" in include:
@@ -153,7 +151,7 @@ async def handle_generate_quality_configs(
     return [
         TextContent(
             type="text",
-            text=json.dumps(payload, ensure_ascii=False, indent=2),
+            text=_json_dumps(payload, indent=2),
         )
     ]
 
