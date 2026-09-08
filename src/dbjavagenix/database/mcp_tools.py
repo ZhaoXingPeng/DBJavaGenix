@@ -89,6 +89,12 @@ def _display_codegen_path(path: Path, project_root: Path) -> str:
         return str(path.absolute())
 
 
+def _write_codegen_file(path: Path, code: str) -> None:
+    """Create the parent directory and write one generated file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(code, encoding="utf-8")
+
+
 def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
     """Tokenize enough SQL to enforce the single, read-only statement contract."""
     tokens: List[tuple[str, str]] = []
@@ -2312,6 +2318,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                     )
                 except ValueError as path_error:
                     file_info["write_error"] = f"Unsafe output path: {path_error}"
+                    file_info["write_error_kind"] = "unsafe_path"
                     logger.warning(
                         "Rejected generated file path %r for %s: %s",
                         raw_relative_path,
@@ -2320,22 +2327,18 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                     )
                     continue
 
-                if output_dir == resources_dir:
-                    resource_files.append(str(full_output_path))
-                else:
-                    written_files.append(str(full_output_path))
-                
-                # 确保父目录存在
-                full_output_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                # 写入文件
+                # Register a path only after both directory creation and the write succeed.
                 try:
-                    with open(full_output_path, 'w', encoding='utf-8') as f:
-                        f.write(file_info["code"])
+                    _write_codegen_file(full_output_path, file_info["code"])
+                    if output_dir == resources_dir:
+                        resource_files.append(str(full_output_path))
+                    else:
+                        written_files.append(str(full_output_path))
                     logger.info(f"Successfully wrote file: {full_output_path}")
                 except Exception as write_error:
                     logger.error(f"Failed to write file {full_output_path}: {write_error}")
                     file_info["write_error"] = str(write_error)
+                    file_info["write_error_kind"] = "write_failed"
         
         # ===== STEP 5: 格式化增强响应（包含包结构优化信息） =====
         result_text = f"🚀 Code Generation Complete: {table_name}\n"
@@ -2414,7 +2417,12 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             if "error" in file_info:
                 result_text += f"  ❌ {template_file}: {file_info['error']}\n"
             elif "write_error" in file_info:
-                result_text += f"  ⚠️ {file_info['filename']}: Generated but write failed - {file_info['write_error']}\n"
+                error_kind = file_info.get("write_error_kind", "write_failed")
+                label = "Path rejected" if error_kind == "unsafe_path" else "Write failed"
+                result_text += (
+                    f"  ⚠️ {file_info['filename']}: Generated but {label.lower()} - "
+                    f"{file_info['write_error']}\n"
+                )
             else:
                 filename = file_info["filename"]
                 code_lines = len(file_info["code"].split('\n'))
@@ -2432,14 +2440,39 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # 文件统计
         total_written = len(written_files) + len(resource_files)
+        write_candidate_count = sum("error" not in file_info for file_info in generated_files.values())
+        path_rejected_count = sum(
+            file_info.get("write_error_kind") == "unsafe_path"
+            for file_info in generated_files.values()
+        )
+        write_failure_count = sum(
+            file_info.get("write_error_kind") == "write_failed"
+            for file_info in generated_files.values()
+        )
+        write_attempt_count = write_candidate_count - path_rejected_count
         result_text += "\n📈 File Writing Summary:\n"
+        result_text += f"  Write Candidates: {write_candidate_count}\n"
+        result_text += f"  Write Attempts: {write_attempt_count}\n"
+        result_text += f"  Write Succeeded: {total_written}\n"
+        result_text += f"  Paths Rejected: {path_rejected_count}\n"
+        result_text += f"  Write Failed: {write_failure_count}\n"
         result_text += f"  Java Files: {java_file_count} written to {java_source_dir.absolute()}\n"
         result_text += f"  Resource Files: {resource_file_count} written to {resources_dir.absolute()}\n"
         result_text += f"  Total Files: {total_written}\n"
-        
-        if total_written > 0:
+
+        generation_failure_count = stats["error_files"]
+        if (
+            generation_failure_count == 0
+            and path_rejected_count == 0
+            and write_failure_count == 0
+            and total_written == write_candidate_count
+        ):
             result_text += "\n🎉 SUCCESS: All files written to SpringBoot project structure!\n"
             result_text += f"📁 Working Directory: {Path.cwd().absolute()}\n"
+        elif total_written > 0:
+            result_text += "\n⚠️ PARTIAL: Some generated files were not written. Review the file errors above.\n"
+        else:
+            result_text += "\n❌ FAILED: No generated files were written. Review the file errors above.\n"
         
         # 简化的代码预览（仅显示文件名，不显示完整代码）
         result_text += "\n📝 Generated Code Preview:\n"
