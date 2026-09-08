@@ -205,6 +205,17 @@ def test_postgresql_introspection_uses_catalog_queries():
     assert all("SHOW TABLES" not in query for query, _ in manager.calls)
 
 
+def test_postgresql_columns_escape_literal_percent_for_psycopg2():
+    manager = RecordingManager()
+
+    columns = DatabaseIntrospector(manager).get_columns("pg-1", "users", "tenant_a")
+
+    assert columns[0]["name"] == "id"
+    query, params = manager.calls[-1]
+    assert "LIKE 'nextval(%%'" in query
+    assert params == ("users", "tenant_a")
+
+
 def test_postgresql_table_references_keep_schema():
     manager = RecordingManager()
 

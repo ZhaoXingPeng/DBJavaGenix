@@ -226,7 +226,7 @@ class DatabaseIntrospector:
                        format_type(a.atttypid, a.atttypmod) AS column_type,
                        c.numeric_precision, c.numeric_scale,
                        c.character_maximum_length, '' AS column_key,
-                       CASE WHEN c.column_default LIKE 'nextval(%' THEN 'auto_increment' ELSE '' END AS extra
+                       CASE WHEN c.column_default LIKE 'nextval(%%' THEN 'auto_increment' ELSE '' END AS extra
                 FROM information_schema.columns c
                 JOIN pg_catalog.pg_namespace n ON n.nspname = c.table_schema
                 JOIN pg_catalog.pg_class tbl
