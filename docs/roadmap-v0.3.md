@@ -9,16 +9,27 @@
 
 ## 当前基线
 
-基线以 `main` 的 `2803b40` 为准；该提交包含最近的治理和仓库元数据维护，运行时代码
-基线仍包含 `f885f57` 的 PostgreSQL schema 存在性修复：
+基线随 `main` 更新；本次证据快照以 `7b07599`（PR #133 合并）为准，运行时代码
+仍包含 `f885f57` 的 PostgreSQL schema 存在性修复：
 
 - 已支持 MySQL、PostgreSQL 和 SQLite 的连接、只读查询和统一元数据契约。
 - 已提供原子代码生成、schema 图算法、MCP Apps、AI 语义增强和基础可观测性。
-- `PYTHONPATH=src python -m pytest -q tests/unit`：660 passed。
+- `PYTHONPATH=src python -m pytest tests/unit/ -q`：668 passed（Windows 11、Python 3.10.1）。
 - SQLite 元数据基准已固定输入和查询次数；`describe_table` 当前每次包含 7 次 SQL 往返，其中第 7 次用于识别 `AUTOINCREMENT`。
-- CI 已用 Testcontainers 启动 MySQL 8.0 和 PostgreSQL 16，并覆盖 MySQL fixture 连通性及
-  PostgreSQL 类型映射；尚未覆盖两个真实数据库上的完整 introspection、schema 隔离和生成链路。
+- CI 已用 Testcontainers 启动 MySQL 8.0 和 PostgreSQL 16-alpine。PR #133 通过真实
+  `ConnectionManager -> DatabaseIntrospector.describe_table` 覆盖两方言的主键、外键、复合
+  索引、NOT NULL 和自增语义；PostgreSQL 另以非 public schema 与 public 同名表验证显式
+  schema 隔离。容器化代码生成链路、SQLite 的集成级等价 fixture 和权限组合仍未覆盖。
 - 当前没有可比较的真实 PostgreSQL/MySQL 延迟、吞吐或内存基准；任何后续 PR 必须先记录实验数据，再讨论优化结果。
+
+### P0 进展记录
+
+- **真实数据库集成矩阵（进行中）**：#133 已完成 MySQL 8.0 / PostgreSQL 16-alpine 的最小
+  metadata contract 和 PostgreSQL schema 隔离回归。剩余验收项是将 SQLite 纳入同层级的
+  fixture 叙述、在容器数据库上验证代码生成输入/输出链路，以及记录权限和版本边界。
+- **查询与元数据契约收口（未立项）**：真实 metadata 查询已能暴露驱动参数化差异；#133
+  发现并修复了 psycopg2 中 `LIKE 'nextval(%%'` 的 literal-percent 转义。该成果不代表查询、空结果
+  和只读限制的完整跨方言合同已经完成。
 
 ## 优先级路线
 
