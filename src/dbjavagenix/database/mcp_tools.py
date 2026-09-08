@@ -1,6 +1,9 @@
 """
 MCP tools for database connection and basic query operations
 """
+from base64 import b64encode
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 import json
 import logging
 import os
@@ -8,6 +11,7 @@ import re
 from functools import lru_cache
 from pathlib import Path, PureWindowsPath
 from typing import Dict, Any, List, Optional
+from uuid import UUID
 
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
 
@@ -51,6 +55,24 @@ _LOCKING_READ_CLAUSES = (
     ("FOR", "KEY", "SHARE"),
     ("LOCK", "IN", "SHARE", "MODE"),
 )
+
+
+def _query_result_json_default(value: object) -> object:
+    """Encode driver result values without losing precision or binary identity."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return {
+            "encoding": "base64",
+            "data": b64encode(bytes(value)).decode("ascii"),
+        }
+    if isinstance(value, timedelta):
+        return str(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _resolve_codegen_output_path(base_dir: Path, relative_path: object) -> Path:
@@ -1025,7 +1047,9 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         else:
             result_text = "Query executed successfully. No rows returned."
         
-        result_text += f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
+        result_text += "\n\nRaw Response: " + json.dumps(
+            response, ensure_ascii=False, default=_query_result_json_default
+        )
         
         return [TextContent(
             type="text",
