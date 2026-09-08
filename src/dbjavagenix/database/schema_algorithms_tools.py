@@ -27,6 +27,7 @@ from ..algorithms import (
     find_cycles,
     topological_sort,
 )
+from ..utils.json_serialization import dumps as _json_dumps
 
 
 SCHEMA_TOPO_TOOL = Tool(
@@ -163,9 +164,7 @@ async def handle_schema_check_cycles(
 
 
 def _render(payload: dict[str, Any]) -> str:
-    import json
-
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+    return _json_dumps(payload, indent=2)
 
 
 SCHEMA_ALGORITHM_TOOLS = [
