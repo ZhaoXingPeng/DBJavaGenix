@@ -31,6 +31,7 @@ from mcp.types import Tool, TextContent
 
 from ..core.exceptions import DatabaseConnectionError, MCPServiceError
 from ..database.connection_manager import connection_manager
+from ..utils.json_serialization import dumps as _json_dumps
 
 logger = logging.getLogger(__name__)
 
@@ -273,13 +274,13 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
                 ],
             },
         }
-        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+        return [TextContent(type="text", text=_json_dumps(result, indent=2))]
 
     except (DatabaseConnectionError, MCPServiceError) as e:
         return [
             TextContent(
                 type="text",
-                text=json.dumps({"error": str(e), "stage": "build_context"}, ensure_ascii=False),
+                text=_json_dumps({"error": str(e), "stage": "build_context"}),
             )
         ]
     except Exception as e:  # noqa: BLE001
@@ -287,9 +288,7 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
         return [
             TextContent(
                 type="text",
-                text=json.dumps(
-                    {"error": f"unexpected: {e}", "stage": "build_context"}, ensure_ascii=False
-                ),
+                text=_json_dumps({"error": f"unexpected: {e}", "stage": "build_context"}),
             )
         ]
 
@@ -314,19 +313,18 @@ async def handle_codegen_render_dto(arguments: Dict[str, Any]) -> List[TextConte
     """Render the Java 21 record DTO exposed by the sb35-java21 template family."""
     context = _extract_context(arguments)
     if not isinstance(context, dict):
-        return [TextContent(type="text", text=json.dumps({"error": "context missing or invalid"}))]
+        return [TextContent(type="text", text=_json_dumps({"error": "context missing or invalid"}))]
 
     if context.get("templateCategory") != "sb35-java21":
         return [
             TextContent(
                 type="text",
-                text=json.dumps(
+                text=_json_dumps(
                     {
                         "files": [],
                         "language": "java",
                         "note": "template_category does not provide a record DTO",
                     },
-                    ensure_ascii=False,
                     indent=2,
                 ),
             )
@@ -345,7 +343,7 @@ async def handle_codegen_render_mapper(arguments: Dict[str, Any]) -> List[TextCo
     """
     context = _extract_context(arguments)
     if not isinstance(context, dict):
-        return [TextContent(type="text", text=json.dumps({"error": "context missing or invalid"}))]
+        return [TextContent(type="text", text=_json_dumps({"error": "context missing or invalid"}))]
 
     category = context.get("templateCategory", "")
     templates: List[str] = []
@@ -363,13 +361,12 @@ async def handle_codegen_render_mapper(arguments: Dict[str, Any]) -> List[TextCo
         return [
             TextContent(
                 type="text",
-                text=json.dumps(
+                text=_json_dumps(
                     {
                         "files": [],
                         "language": "java",
                         "note": f"template_category={category} 不需要 mapper 层(BaseMapper/JpaRepository 内置)",
                     },
-                    ensure_ascii=False,
                     indent=2,
                 ),
             )
@@ -406,7 +403,7 @@ async def _render_single_layer(
         return [
             TextContent(
                 type="text",
-                text=json.dumps({"error": "context missing or not a dict"}, ensure_ascii=False),
+                text=_json_dumps({"error": "context missing or not a dict"}),
             )
         ]
 
@@ -419,13 +416,12 @@ async def _render_single_layer(
         return [
             TextContent(
                 type="text",
-                text=json.dumps(
+                text=_json_dumps(
                     {
                         "error": "unsupported template category",
                         "template_category": category,
                         "supported_categories": supported_categories,
                     },
-                    ensure_ascii=False,
                     indent=2,
                 ),
             )
@@ -492,7 +488,7 @@ async def _render_single_layer(
 
     content = TextContent(
         type="text",
-        text=json.dumps({"files": files, "language": "java"}, ensure_ascii=False, indent=2),
+        text=_json_dumps({"files": files, "language": "java"}, indent=2),
     )
     return [attach_meta(content, diff_meta)]
 
