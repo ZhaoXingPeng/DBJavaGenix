@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from dbjavagenix.core.models import DatabaseConfig, DatabaseType
+from dbjavagenix.database.codegen_tools import CodegenAnalyzer, CodegenGenerator
 from dbjavagenix.database.connection_manager import ConnectionManager
 from dbjavagenix.database.introspection import DatabaseIntrospector
 
@@ -64,6 +65,57 @@ def _assert_child_metadata_contract(metadata: dict[str, Any], expected_schema: s
         ("region_code", 2),
     ]
     assert all(index["unique"] is False for index in composite_index)
+
+
+async def _assert_real_codegen_contract(
+    fixture: dict[str, Any], expected_schema: str
+) -> dict[str, Any]:
+    """Exercise analysis and rendering with metadata returned by a live database."""
+    analyzer = CodegenAnalyzer(fixture["introspector"].connection_manager)
+    analysis = await analyzer.analyze_table_for_codegen(
+        fixture["connection_id"], CHILD_TABLE, schema=expected_schema
+    )
+
+    assert analysis["table_name"] == CHILD_TABLE
+    assert analysis["table_info"]["schema"] == expected_schema
+    columns = {column["name"]: column for column in analysis["table_info"]["columns"]}
+    assert {"id", "parent_id", "region_code", "created_at"} <= set(columns)
+    assert columns["id"]["primary_key"] is True
+    assert columns["id"]["auto_increment"] is True
+    assert columns["parent_id"]["nullable"] is False
+    assert analysis["relationships"]["primary_keys"] == ["id"]
+    assert analysis["relationships"]["foreign_keys"] == [
+        {
+            "constraint_name": "contract_child_parent_fk",
+            "column_name": "parent_id",
+            "referenced_table": PARENT_TABLE,
+            "referenced_column": "id",
+        }
+    ]
+    assert analysis["template_context"]["tableName"] == CHILD_TABLE
+    assert {column["name"] for column in analysis["template_context"]["columns"]} >= {
+        "id",
+        "parent_id",
+        "region_code",
+        "created_at",
+    }
+
+    generated = await CodegenGenerator().generate_code(
+        analysis, template_category="MybatisPlus-Mixed"
+    )
+
+    assert generated["generation_statistics"] == {
+        "total_files": 7,
+        "success_files": 7,
+        "error_files": 0,
+    }
+    assert all("error" not in file for file in generated["generated_code"].values())
+    entity = generated["generated_code"]["entity.mustache"]["code"]
+    assert "public class ContractChild" in entity
+    assert "private Long id;" in entity
+    assert "private Long parentId;" in entity
+
+    return analysis
 
 
 @pytest.fixture
@@ -192,3 +244,22 @@ def test_postgresql_describe_table_scopes_real_metadata_to_schema(
         ]
         == fixture["schema"]
     )
+
+
+@pytest.mark.asyncio
+async def test_mysql_real_metadata_reaches_template_generation(
+    mysql_contract_metadata: dict[str, Any],
+) -> None:
+    await _assert_real_codegen_contract(mysql_contract_metadata, mysql_contract_metadata["schema"])
+
+
+@pytest.mark.asyncio
+async def test_postgresql_real_metadata_reaches_schema_scoped_template_generation(
+    postgres_contract_metadata: dict[str, Any],
+) -> None:
+    fixture = postgres_contract_metadata
+    analysis = await _assert_real_codegen_contract(fixture, fixture["schema"])
+
+    # ``public.contract_child`` only has a UUID id; these fields prove the
+    # non-public relation was analyzed and passed to the renderer.
+    assert {column["name"] for column in analysis["table_info"]["columns"]} != {"id"}
