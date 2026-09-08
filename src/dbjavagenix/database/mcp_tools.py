@@ -23,6 +23,7 @@ from ..core.exceptions import (
 )
 from ..database.connection_manager import connection_manager
 from ..database.introspection import DatabaseIntrospector
+from ..database.dialect import get_dialect, list_supported_dialects
 from ..database.sql_identifiers import quote_mysql_identifier
 from ..database.capabilities import supported_database_type_values
 from ..config.config_manager import ConfigManager
@@ -1072,15 +1073,30 @@ def _get_java_type_mapping(db_type: DatabaseType, column_type: str, precision: O
         
     Returns:
         Dict with java_type and imports
+
+    Supported runtime dialects use the same adapter as code generation. The
+    legacy YAML mapping remains a fallback for dialects without a registered
+    runtime adapter.
     """
     try:
+        db_key = (
+            db_type.value.lower()
+            if isinstance(db_type, DatabaseType)
+            else str(db_type).lower()
+        )
+        if db_key in list_supported_dialects():
+            dialect = get_dialect(db_key)
+            return {
+                "java_type": dialect.java_type_for(column_type),
+                "imports": dialect.java_imports_for(column_type),
+            }
+
         config_manager = ConfigManager()
         if hasattr(config_manager, "get_type_mapping"):
             type_mapping = config_manager.get_type_mapping()
         else:
             type_mapping = _load_default_type_mapping()
         
-        db_key = db_type.value.lower()
         column_type_upper = column_type.upper().strip()
         base_type = re.sub(r"\([^)]*\)", "", column_type_upper)
         base_type = re.sub(r"\s+", " ", base_type).strip()

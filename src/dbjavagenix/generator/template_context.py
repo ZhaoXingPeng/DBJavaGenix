@@ -366,25 +366,11 @@ class TemplateContextBuilder:
 
     def _build_imports(self, columns: List[ColumnInfo], template_category: str) -> List[str]:
         """构建导入列表"""
-        imports = []
-        java_types = {self._map_java_type(col.data_type) for col in columns}
-
-        # 时间类型导入
-        import_by_type = {
-            "LocalDateTime": "java.time.LocalDateTime",
-            "LocalDate": "java.time.LocalDate",
-            "LocalTime": "java.time.LocalTime",
-            "OffsetDateTime": "java.time.OffsetDateTime",
-            "OffsetTime": "java.time.OffsetTime",
-            "Instant": "java.time.Instant",
-            "BigDecimal": "java.math.BigDecimal",
-            "BigInteger": "java.math.BigInteger",
-            "UUID": "java.util.UUID",
+        imports = {
+            import_path
+            for column in columns
+            for import_path in self.dialect.java_imports_for(column.data_type)
         }
-        imports.extend(
-            import_by_type[java_type] for java_type in java_types if java_type in import_by_type
-        )
-
         return sorted(imports)
 
     def _has_date_field(self, columns: List[ColumnInfo]) -> bool:
