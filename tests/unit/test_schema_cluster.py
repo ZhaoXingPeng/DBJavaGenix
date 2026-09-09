@@ -1,4 +1,5 @@
 """Unit tests for schema_cluster (Union-Find clustering)."""
+
 import pytest
 
 from dbjavagenix.algorithms.schema_cluster import ClusterResult, cluster_tables
@@ -79,3 +80,14 @@ class TestClusterTables:
             [("zeta", "alpha"), ("mu", "alpha")],
         )
         assert r.clusters[0] == ["alpha", "mu", "zeta"]
+
+    def test_duplicate_tables_do_not_duplicate_cluster_members(self):
+        r = cluster_tables(
+            ["users", "users", "orders", "orders"],
+            [("orders", "users"), ("orders", "users")],
+        )
+        assert r.clusters == [["orders", "users"]]
+
+    def test_malformed_graph_values_are_ignored(self):
+        r = cluster_tables(["users", "", None], [("users", ""), (None, "users")])
+        assert r.clusters == [["users"]]
