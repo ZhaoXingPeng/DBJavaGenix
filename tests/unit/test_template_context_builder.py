@@ -326,6 +326,47 @@ class TestBuildContextStructure:
         assert len(pk_cols) == 1
         assert pk_cols[0]["javaName"] == "userId"
 
+    def test_primary_key_list_normalizes_column_context_and_preserves_order(self, builder):
+        table = TableInfo(
+            name="order_item",
+            schema="public",
+            columns=[
+                ColumnInfo(name="line_no", data_type="INT", java_type="Integer"),
+                ColumnInfo(name="order_id", data_type="BIGINT", java_type="Long"),
+                ColumnInfo(name="sku", data_type="VARCHAR(32)", java_type="String"),
+            ],
+            primary_keys=["order_id", "line_no"],
+        )
+
+        context = builder.build_context(table, "Default")
+
+        assert context["primaryKey"]["dbName"] == "order_id"
+        assert [column["name"] for column in context["columns"] if column["isPrimaryKey"]] == [
+            "line_no",
+            "order_id",
+        ]
+        assert [column["name"] for column in context["nonPrimaryColumns"]] == ["sku"]
+
+    def test_unmatched_primary_key_list_falls_back_to_column_flags(self, builder):
+        table = TableInfo(
+            name="account",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="id",
+                    data_type="BIGINT",
+                    java_type="Long",
+                    primary_key=True,
+                )
+            ],
+            primary_keys=["missing_id"],
+        )
+
+        context = builder.build_context(table, "Default")
+
+        assert context["primaryKey"]["dbName"] == "id"
+        assert context["columns"][0]["isPrimaryKey"] is True
+
     @pytest.mark.parametrize("auto_increment", [True, False])
     def test_primary_key_context_preserves_auto_increment(self, builder, auto_increment):
         table = TableInfo(
@@ -378,6 +419,67 @@ class TestBuildContextStructure:
         rendered = MustacheTemplateEngine().render_file(str(template), context)
 
         assert ('useGeneratedKeys="true"' in rendered) is auto_increment
+
+    @pytest.mark.parametrize("auto_increment", [True, False])
+    def test_default_xml_mapper_gates_generated_key_options(self, builder, auto_increment):
+        table = TableInfo(
+            name="account",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="account_code",
+                    data_type="VARCHAR(32)",
+                    java_type="String",
+                    primary_key=True,
+                    auto_increment=auto_increment,
+                ),
+                ColumnInfo(name="display_name", data_type="VARCHAR(64)", java_type="String"),
+            ],
+            primary_keys=["account_code"],
+        )
+        context = builder.build_context(table, "Default")
+        template = (
+            Path(__file__).parents[2]
+            / "src"
+            / "dbjavagenix"
+            / "templates"
+            / "java"
+            / "Default"
+            / "mapper.xml.mustache"
+        )
+
+        rendered = MustacheTemplateEngine().render_file(str(template), context)
+        insert_lines = [line.strip() for line in rendered.splitlines() if "<insert id=" in line]
+
+        assert len(insert_lines) == 3
+        for line in insert_lines:
+            assert ('keyProperty="accountCode"' in line) is auto_increment
+            assert ('useGeneratedKeys="true"' in line) is auto_increment
+
+    def test_default_xml_mapper_without_primary_key_has_no_generated_key_options(self, builder):
+        table = TableInfo(
+            name="audit_log",
+            schema="public",
+            columns=[ColumnInfo(name="message", data_type="TEXT", java_type="String")],
+        )
+        context = builder.build_context(table, "Default")
+        template = (
+            Path(__file__).parents[2]
+            / "src"
+            / "dbjavagenix"
+            / "templates"
+            / "java"
+            / "Default"
+            / "mapper.xml.mustache"
+        )
+
+        rendered = MustacheTemplateEngine().render_file(str(template), context)
+        insert_lines = [line for line in rendered.splitlines() if "<insert id=" in line]
+
+        assert len(insert_lines) == 3
+        assert all(
+            "keyProperty" not in line and "useGeneratedKeys" not in line for line in insert_lines
+        )
 
     def test_with_prefix_analysis_creates_suffix(self, builder, rbac_user_table):
         # 提供同前缀的表名集合,前缀分析器应识别出 sys 前缀

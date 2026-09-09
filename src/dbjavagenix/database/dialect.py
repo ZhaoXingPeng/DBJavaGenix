@@ -28,6 +28,18 @@ from typing import Dict
 
 _PAREN_PATTERN = re.compile(r"\([^)]*\)")
 
+_JAVA_TYPE_IMPORTS = {
+    "LocalDateTime": "java.time.LocalDateTime",
+    "LocalDate": "java.time.LocalDate",
+    "LocalTime": "java.time.LocalTime",
+    "OffsetDateTime": "java.time.OffsetDateTime",
+    "OffsetTime": "java.time.OffsetTime",
+    "Instant": "java.time.Instant",
+    "BigDecimal": "java.math.BigDecimal",
+    "BigInteger": "java.math.BigInteger",
+    "UUID": "java.util.UUID",
+}
+
 
 def _strip_paren(db_type: str) -> str:
     """剥离 `VARCHAR(64)` 这种带长度的括号部分,统一小写无空格。"""
@@ -83,6 +95,12 @@ class DialectAdapter(ABC):
     def jdbc_type_for(self, db_type: str) -> str:
         base = _strip_paren(db_type)
         return self.type_to_jdbc.get(base, "VARCHAR")
+
+    def java_imports_for(self, db_type: str) -> list[str]:
+        """Return imports required by the mapped Java type."""
+        java_type = self.java_type_for(db_type)
+        import_path = _JAVA_TYPE_IMPORTS.get(java_type)
+        return [import_path] if import_path else []
 
     def is_string_type(self, db_type: str) -> bool:
         return _strip_paren(db_type) in self.string_types

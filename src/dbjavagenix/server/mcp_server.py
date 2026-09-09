@@ -18,6 +18,7 @@ from ..database.mcp_tools import (
     get_codegen_tools,
     get_springboot_project_tools,
     handle_db_connect_test,
+    handle_db_disconnect,
     handle_db_query_databases,
     handle_db_query_tables, 
     handle_db_query_table_exists,
