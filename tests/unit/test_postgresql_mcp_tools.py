@@ -7,6 +7,7 @@ import pytest
 
 from dbjavagenix.core.models import DatabaseType
 from dbjavagenix.database import mcp_tools
+from dbjavagenix.database.dialect import get_dialect
 
 
 @pytest.fixture
@@ -236,8 +237,8 @@ def test_postgresql_java_mapping_normalizes_catalog_type_names():
         DatabaseType.POSTGRESQL, "timestamp with time zone"
     ) == {"java_type": "OffsetDateTime", "imports": ["java.time.OffsetDateTime"]}
     assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "uuid") == {
-        "java_type": "UUID",
-        "imports": ["java.util.UUID"],
+        "java_type": "String",
+        "imports": [],
     }
     assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "jsonb") == {
         "java_type": "String",
@@ -250,6 +251,40 @@ def test_postgresql_java_mapping_normalizes_catalog_type_names():
     assert mcp_tools._get_java_type_mapping(
         DatabaseType.POSTGRESQL, "timestamp(6) with time zone"
     ) == {"java_type": "OffsetDateTime", "imports": ["java.time.OffsetDateTime"]}
+
+
+@pytest.mark.parametrize(
+    ("database_type", "column_type"),
+    [
+        (DatabaseType.MYSQL, "TINYINT(1)"),
+        (DatabaseType.MYSQL, "SMALLINT"),
+        (DatabaseType.POSTGRESQL, "INT2"),
+        (DatabaseType.POSTGRESQL, "UUID"),
+        (DatabaseType.SQLITE, "INTEGER"),
+        (DatabaseType.SQLITE, "DATETIME"),
+    ],
+)
+def test_supported_mcp_mapping_matches_codegen_dialect(database_type, column_type):
+    expected = get_dialect(database_type.value)
+
+    assert mcp_tools._get_java_type_mapping(database_type, column_type) == {
+        "java_type": expected.java_type_for(column_type),
+        "imports": expected.java_imports_for(column_type),
+    }
+
+
+def test_supported_mcp_mapping_unknown_type_matches_codegen_fallback():
+    assert mcp_tools._get_java_type_mapping(DatabaseType.POSTGRESQL, "CUSTOM_DOMAIN") == {
+        "java_type": "String",
+        "imports": [],
+    }
+
+
+def test_unregistered_dialect_keeps_legacy_yaml_mapping_fallback():
+    assert mcp_tools._get_java_type_mapping(DatabaseType.SQLSERVER, "INT") == {
+        "java_type": "Integer",
+        "imports": [],
+    }
 
 
 @pytest.mark.asyncio

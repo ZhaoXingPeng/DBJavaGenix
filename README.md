@@ -13,7 +13,7 @@ graph LR
     Skills[".claude/skills/<br/>java-codegen-from-db<br/>springboot-migration"]
     Skills -->|按需调用| MCP
 
-    subgraph MCP[MCP Server 33 工具]
+    subgraph MCP[MCP Server 34 工具]
         direction TB
         DB[db_* 连接 / 查询 / 描述]
         Atom[codegen_build_context<br/>codegen_render_entity/dao/service/<br/>controller/dto/mapper]
@@ -90,6 +90,7 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 5. 调用 `ai_recommend_template` 推荐 → 检测到 RBAC,推 `MybatisPlus-Mixed`
 6. 用 `codegen_build_context` + 6 个 `codegen_render_*` 分层生成,每层返回 code-diff
 7. 用户确认后写盘
+8. 会话结束时调用 `db_disconnect(connection_id)` 释放连接
 
 ## 核心能力 (Phase 1 → 5)
 
@@ -130,11 +131,11 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 - 结构化日志: `DBJAVAGENIX_LOG_FORMAT=json` 可输出单行 JSON,适合 Loki/ELK
 - [部署手册](docs/deployment.md): 3 种部署模式 + 6 个排障场景
 
-## 工具总览 (33 个)
+## 工具总览 (34 个)
 
 | 类别 | 工具 |
 |------|------|
-| 连接 / 查询 | db_connect_test / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
+| 连接 / 查询 | db_connect_test / db_disconnect / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
 | 表结构 | db_table_describe / db_table_columns / db_table_primary_keys / db_table_foreign_keys / db_table_indexes |
 | Schema 图算法 | schema_topo_order / schema_cluster_tables / schema_check_cycles |
 | 代码生成 (atomic) | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_dto / codegen_render_mapper |
@@ -166,7 +167,7 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 ```
 [ Skills 层 ]  定义"怎么做" — .claude/skills/*.md  显式 5 阶段工作流
        ↓
-[ MCP 层 ]     提供"能做什么" — 33 个原子工具  context 显式传递
+[ MCP 层 ]     提供"能做什么" — 34 个原子工具  context 显式传递
        ↓
 [ Apps 层 ]    让结果"看得见" — 4 个 UI 组件 (mermaid/dashboard/code-diff/tree)
 ```
@@ -187,7 +188,7 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 | [docs/screenshots/README.md](docs/screenshots/README.md) | MCP Apps 4 组件客户端兼容性 |
 | [docs/algorithms-overview.md](docs/algorithms-overview.md) | v0.2.1 schema 图算法 (topo / cluster / cycle) |
 | [docs/design-patterns-catalog.md](docs/design-patterns-catalog.md) | 生成器与生成代码中的设计模式 |
-| [docs/adr/](docs/adr/) | 14 个 ADR (架构 / 原子 / 渐进 / 规则 / 不引依赖 / schema 算法 / 规范配置 / MCP v3 / 1h 缓存 / agentic / 多方言 / SDK 契约 / 工具契约 / 元数据契约) |
+| [docs/adr/](docs/adr/) | 15 个 ADR (架构 / 原子 / 渐进 / 规则 / 不引依赖 / schema 算法 / 规范配置 / MCP v3 / 1h 缓存 / agentic / 多方言 / SDK 契约 / 工具契约 / 元数据契约 / 连接生命周期) |
 | [.claude/skills/java-codegen-from-db/SKILL.md](.claude/skills/java-codegen-from-db/SKILL.md) | 主 Skill: 代码生成 5 阶段工作流 |
 | [.claude/skills/springboot-migration/SKILL.md](.claude/skills/springboot-migration/SKILL.md) | 第二 Skill: Spring Boot 2.7→3.x 迁移 |
 
