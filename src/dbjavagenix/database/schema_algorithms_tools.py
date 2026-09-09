@@ -25,6 +25,7 @@ from mcp.types import TextContent, Tool
 from ..algorithms import (
     cluster_tables,
     find_cycles,
+    normalize_graph_input,
     topological_sort,
 )
 from ..utils.json_serialization import dumps as _json_dumps
@@ -114,13 +115,7 @@ SCHEMA_CYCLE_TOOL = Tool(
 
 
 def _parse_input(arguments: dict[str, Any]) -> tuple[list[str], list[tuple[str, str]]]:
-    tables = list(arguments.get("tables", []))
-    raw_fks = arguments.get("fks", [])
-    fks: list[tuple[str, str]] = []
-    for fk in raw_fks:
-        if isinstance(fk, (list, tuple)) and len(fk) == 2:
-            fks.append((str(fk[0]), str(fk[1])))
-    return tables, fks
+    return normalize_graph_input(arguments.get("tables"), arguments.get("fks"))
 
 
 async def handle_schema_topo_order(arguments: dict[str, Any]) -> list[TextContent]:
