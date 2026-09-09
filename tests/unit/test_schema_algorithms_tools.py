@@ -119,3 +119,26 @@ class TestMalformedInput:
         result = _run(handle_schema_topo_order({"tables": ["a"], "fks": [["a"], ["a", "b", "c"]]}))
         payload = json.loads(result[0].text)
         assert payload["order"] == ["a"]
+
+    def test_string_containers_are_not_split_into_nodes(self):
+        result = _run(handle_schema_topo_order({"tables": "users", "fks": "invalid"}))
+        payload = json.loads(result[0].text)
+        assert payload == {
+            "order": [],
+            "unresolved": [],
+            "levels": {},
+            "has_cycle": False,
+        }
+
+    def test_duplicate_tables_are_normalized_before_rendering(self):
+        result = _run(
+            handle_schema_cluster_tables(
+                {
+                    "tables": ["users", "users", "orders"],
+                    "fks": [["orders", "users"], ["orders", "users"]],
+                }
+            )
+        )
+        payload = json.loads(result[0].text)
+        assert payload["num_clusters"] == 1
+        assert payload["clusters"][0]["members"] == ["orders", "users"]

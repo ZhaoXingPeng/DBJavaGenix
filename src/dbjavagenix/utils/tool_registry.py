@@ -47,6 +47,12 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         always_visible=True,
         description_brief=("建立数据库连接 (" + "/".join(supported_database_display_names()) + ")"),
     ),
+    "db_disconnect": ToolMetadata(
+        name="db_disconnect",
+        tags={"disconnect", "close", "connection", "release", "cleanup", "session"},
+        category="connection",
+        description_brief="关闭并释放数据库连接会话",
+    ),
     "db_query_databases": ToolMetadata(
         name="db_query_databases",
         tags={"list", "databases", "schemas"},
