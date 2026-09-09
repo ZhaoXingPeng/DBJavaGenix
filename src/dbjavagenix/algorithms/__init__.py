@@ -9,6 +9,7 @@ The MCP tool wrappers live in `dbjavagenix.database.schema_algorithms_tools`.
 from .schema_topo import TopoResult, topological_sort
 from .schema_cluster import ClusterResult, cluster_tables
 from .schema_cycle_check import CycleResult, find_cycles
+from .graph_input import normalize_graph_input
 
 __all__ = [
     "TopoResult",
@@ -17,4 +18,5 @@ __all__ = [
     "cluster_tables",
     "CycleResult",
     "find_cycles",
+    "normalize_graph_input",
 ]

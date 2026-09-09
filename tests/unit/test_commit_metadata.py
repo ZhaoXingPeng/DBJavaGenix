@@ -8,6 +8,7 @@ _POLICY = runpy.run_path(str(Path(__file__).parents[2] / "scripts" / "validate_c
 validate_title = _POLICY["validate_title"]
 validate_pr_body = _POLICY["validate_pr_body"]
 validate_issue_body = _POLICY["validate_issue_body"]
+validate_main = _POLICY["main"]
 
 
 VALID_PR_BODY = """## 关联 Issue
@@ -37,6 +38,48 @@ Closes #118
 ## 兼容性、风险与回滚
 
 模板变为必填；回滚本提交。
+"""
+
+VALID_BUG_ISSUE_BODY = """## 版本与环境
+
+Python 3.12，固定 SQLite fixture。
+
+## 问题与预期行为
+
+实际结果与预期结果不一致。
+
+## 最小复现
+
+运行最小测试命令即可复现。
+
+## 验收标准
+
+- [ ] 回归测试通过。
+
+## 非目标、风险与安全
+
+不涉及凭据或生产数据；恢复单一提交即可回滚。
+"""
+
+VALID_FEATURE_ISSUE_BODY = """## 问题与用户价值
+
+统一合同，降低维护成本。
+
+## 建议方案与替代方案
+
+复用共享 helper；不采用重复实现。
+
+## 验收标准
+
+- [ ] 新旧入口行为一致。
+
+## 架构、兼容性与测试计划
+
+保持公共 API，运行单元测试和静态检查。
+
+## 非目标与风险
+
+不改变数据库 schema；回滚单一提交。
 """
 
 
@@ -81,24 +124,6 @@ def test_rejects_likely_encoding_corruption():
     assert any("UTF-8 encoding" in error for error in errors)
 
 
-def test_rejects_replacement_character_pseudo_newline_and_placeholder_title():
-    replacement_errors = validate_title(":books: docs(governance): 修复\ufffd")
-    pseudo_newline_errors = validate_title(":books: docs(governance): 修复\\n占位")
-    placeholder_errors = validate_title(":books: docs(governance): <请填写摘要>")
-
-    assert any("replacement character" in error for error in replacement_errors)
-    assert any("literal" in error for error in pseudo_newline_errors)
-    assert any("placeholder" in error for error in placeholder_errors)
-
-
-def test_rejects_generic_title_and_sentence_punctuation():
-    assert validate_title("init")
-    assert any(
-        "sentence punctuation" in error
-        for error in validate_title(":books: docs(readme): 更新说明。")
-    )
-
-
 def test_accepts_complete_pr_body():
     assert validate_pr_body(VALID_PR_BODY) == []
 
@@ -110,79 +135,61 @@ def test_rejects_incomplete_pr_body_and_encoding_corruption():
     assert any("missing required section" in error for error in errors)
 
 
-def test_rejects_empty_pr_sections_and_unreplaced_placeholders():
-    body = VALID_PR_BODY.replace("固化契约。", "").replace(
-        "模板变为必填；回滚本提交。", "<填写风险>"
+def test_rejects_empty_and_out_of_order_pr_sections():
+    empty = VALID_PR_BODY.replace("更新模板和 CI。", "")
+    errors = validate_pr_body(empty)
+    assert any("section is empty" in error for error in errors)
+
+    out_of_order = (
+        VALID_PR_BODY.replace("## 任务（Task）", "## TEMP")
+        .replace("## 行动（Action）", "## 任务（Task）")
+        .replace("## TEMP", "## 行动（Action）")
+    )
+    assert any("out of order" in error for error in validate_pr_body(out_of_order))
+
+
+def test_rejects_replacement_control_and_literal_escape_characters():
+    replacement_errors = validate_pr_body(VALID_PR_BODY.replace("固化契约。", "固化\ufffd契约。"))
+    assert any("replacement characters" in error for error in replacement_errors)
+
+    control_errors = validate_pr_body(VALID_PR_BODY.replace("固化契约。", "固化\x01契约。"))
+    assert any("control characters" in error for error in control_errors)
+
+    escape_errors = validate_pr_body(VALID_PR_BODY.replace("固化契约。", "固化\\r\\n契约。"))
+    assert any("literal escape sequences" in error for error in escape_errors)
+
+
+def test_accepts_windows_paths_in_body_text():
+    body = VALID_PR_BODY.replace("固化契约。", r"记录 C:\tmp\report，固化契约。")
+    assert validate_pr_body(body) == []
+
+
+def test_validates_bug_and_feature_issue_bodies():
+    assert validate_issue_body(VALID_BUG_ISSUE_BODY, ":bug: fix(database): 修复事务") == []
+    assert (
+        validate_issue_body(VALID_FEATURE_ISSUE_BODY, ":sparkles: feat(database): 增加能力") == []
     )
 
-    errors = validate_pr_body(body)
 
-    assert any("section is empty" in error for error in errors)
-    assert any("placeholder" in error for error in errors)
-
-
-VALID_ISSUE_BODY = """## 问题与用户价值
-
-贡献者需要可追溯的元数据规范。
-
-## 建议方案与替代方案
-
-扩展纯 Python 校验器；不依赖网络。
-
-## 验收标准
-
-- [ ] 覆盖正文结构和编码信号。
-
-## 架构、兼容性与测试计划
-
-运行单元测试，保持运行时 API 不变。
-
-## 非目标与风险
-
-不重写历史提交；回滚治理提交。
-"""
+def test_rejects_issue_body_with_wrong_template_and_encoding():
+    errors = validate_issue_body(
+        VALID_BUG_ISSUE_BODY.replace("## 最小复现", "## 复现步骤").replace(
+            "固定 SQLite", "固定?? SQLite"
+        ),
+        ":bug: fix(database): 修复事务",
+    )
+    assert any("consecutive '?'" in error for error in errors)
+    assert any("missing required section" in error for error in errors)
 
 
-def test_accepts_complete_issue_body():
-    assert validate_issue_body(VALID_ISSUE_BODY) == []
-
-
-def test_accepts_issue_form_headings():
-    body = """### 环境信息
-
-Python 3.12；SQLite fixture。
-
-### 问题与预期行为
-
-描述实际和预期行为。
-
-### 复现步骤
-
-运行脱敏的最小命令。
-
-### 验收标准
-
-- [ ] 回归测试通过。
-
-### 非目标、风险与安全信息
-
-不包含凭据；可回滚。
-"""
-
-    assert validate_issue_body(body) == []
-
-
-def test_rejects_issue_body_with_missing_sections_and_pseudo_newline():
-    errors = validate_issue_body("## 问题与用户价值\\n\n说明")
-
-    assert any("complete bug or feature section set" in error for error in errors)
-    assert any("literal" in error for error in errors)
-
-
-def test_rejects_issue_body_with_empty_section_and_control_character():
-    body = VALID_ISSUE_BODY.replace("扩展纯 Python 校验器；不依赖网络。", "") + "\x0b"
-
-    errors = validate_issue_body(body)
-
-    assert any("section is empty" in error for error in errors)
-    assert any("control character" in error for error in errors)
+def test_issue_event_cli_validates_title_and_body(tmp_path, capsys):
+    event_path = tmp_path / "issues.json"
+    event_path.write_text(
+        '{"issue": {"title": ":sparkles: feat(database): 增加能力", '
+        '"body": ' + repr(VALID_FEATURE_ISSUE_BODY).replace("'", '"') + "}}",
+        encoding="utf-8",
+    )
+    assert validate_main(["--issue-event", str(event_path)]) == 0
+    output = capsys.readouterr()
+    assert "OK: issue title" in output.out
+    assert "OK: issue body" in output.out

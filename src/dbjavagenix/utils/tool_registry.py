@@ -20,6 +20,8 @@ from typing import Dict, List, Optional, Set
 
 from mcp.types import Tool
 
+from ..database.capabilities import supported_database_display_names
+
 
 @dataclass
 class ToolMetadata:
@@ -43,7 +45,13 @@ _REGISTRY: Dict[str, ToolMetadata] = {
         tags={"connect", "connection", "database", "test", "establish", "init"},
         category="connection",
         always_visible=True,
-        description_brief="建立数据库连接 (MySQL/PostgreSQL/SQLite/Oracle/SqlServer)",
+        description_brief=("建立数据库连接 (" + "/".join(supported_database_display_names()) + ")"),
+    ),
+    "db_disconnect": ToolMetadata(
+        name="db_disconnect",
+        tags={"disconnect", "close", "connection", "release", "cleanup", "session"},
+        category="connection",
+        description_brief="关闭并释放数据库连接会话",
     ),
     "db_query_databases": ToolMetadata(
         name="db_query_databases",

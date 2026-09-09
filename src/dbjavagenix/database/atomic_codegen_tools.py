@@ -31,23 +31,25 @@ from mcp.types import Tool, TextContent
 
 from ..core.exceptions import DatabaseConnectionError, MCPServiceError
 from ..database.connection_manager import connection_manager
+from ..database.introspection import DatabaseIntrospector
+from ..generator.template_context import apply_generation_options
 from ..utils.json_serialization import dumps as _json_dumps
 
 logger = logging.getLogger(__name__)
 
 
-async def _run_db_call(callable_obj, *args):
+async def _run_db_call(callable_obj, *args, **kwargs):
     """Run blocking database work outside the MCP event loop."""
-    return await asyncio.to_thread(callable_obj, *args)
+    return await asyncio.to_thread(callable_obj, *args, **kwargs)
 
 
 async def _run_async_db_call(callable_obj, *args, **kwargs):
-    """Run the async analyzer in a worker because its introspection is synchronous."""
+    """Run an async analyzer in a worker when it performs blocking I/O."""
 
     def run():
         return asyncio.run(callable_obj(*args, **kwargs))
 
-    return await asyncio.to_thread(run)
+    return await _run_db_call(run)
 
 
 # ============================================================
@@ -104,6 +106,16 @@ def get_atomic_codegen_tools() -> List[Tool]:
                     "include_swagger": {"type": "boolean", "default": True},
                     "include_lombok": {"type": "boolean", "default": True},
                     "include_mapstruct": {"type": "boolean", "default": True},
+                    "generate_dto": {
+                        "type": "boolean",
+                        "description": "Generate a DTO artifact when the template category does not provide one",
+                        "default": False,
+                    },
+                    "generate_vo": {
+                        "type": "boolean",
+                        "description": "Generate a VO artifact",
+                        "default": False,
+                    },
                     "project_path": {
                         "type": "string",
                         "description": "Optional target Spring Boot project path",
@@ -252,6 +264,11 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
                 "useLombok": include_lombok,
                 "useMapStruct": include_mapstruct,
             }
+        )
+        apply_generation_options(
+            context,
+            generate_dto=arguments.get("generate_dto"),
+            generate_vo=arguments.get("generate_vo"),
         )
 
         # 重写包路径(尊重 package_suffix)
@@ -512,48 +529,16 @@ def _compute_file_path(
     package_name = context.get("package", "com.example")
     package_path = package_name.replace(".", "/")
     if file_path.endswith(".java"):
-        normalized_path = "/".join(part for part in file_path.split("/") if part)
-        return f"{package_path}/{normalized_path}"
+        return f"{package_path}/{file_path}"
     return f"resources/{file_path}"
 
 
-def _collect_all_table_names(connection_id: str, config) -> List[str]:
+def _collect_all_table_names(connection_id: str, _config) -> List[str]:
     """收集库内所有表名(用于前缀分析)。失败时返回空列表。"""
     try:
-
-        def collect(cursor) -> List[str]:
-            if config.type.name == "MYSQL":
-                cursor.execute("SHOW TABLES")
-                return [row[0] for row in cursor.fetchall()]
-            if config.type.name == "SQLITE":
-                cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                )
-                return [row[0] for row in cursor.fetchall()]
-            if config.type.name == "POSTGRESQL":
-                cursor.execute(
-                    "SELECT table_name FROM information_schema.tables "
-                    "WHERE table_catalog = current_database() "
-                    "AND table_type = 'BASE TABLE' "
-                    "AND table_schema NOT IN ('pg_catalog', 'information_schema') "
-                    "ORDER BY table_schema, table_name"
-                )
-                return [row[0] for row in cursor.fetchall()]
-            return []
-
-        if hasattr(connection_manager, "get_cursor"):
-            with connection_manager.get_cursor(connection_id) as cursor:
-                return collect(cursor)
-
-        # Preserve the small test-double contract used by older integrations.
-        connection = connection_manager.get_connection(connection_id)
-        cursor = connection.cursor()
-        try:
-            return collect(cursor)
-        finally:
-            cursor.close()
+        return DatabaseIntrospector(connection_manager).list_tables(connection_id)
     except Exception as e:  # noqa: BLE001
-        logger.warning(f"_collect_all_table_names failed: {e}")
+        logger.warning("_collect_all_table_names failed: %s", e)
         return []
 
 

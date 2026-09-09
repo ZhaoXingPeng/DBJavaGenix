@@ -1,10 +1,7 @@
 """
 MCP tools for database connection and basic query operations
 """
-from base64 import b64encode
 import asyncio
-from datetime import date, datetime, time, timedelta
-from decimal import Decimal
 import json
 import logging
 import os
@@ -27,6 +24,7 @@ from ..core.exceptions import (
 )
 from ..database.connection_manager import connection_manager
 from ..database.introspection import DatabaseIntrospector
+from ..database.dialect import get_dialect, list_supported_dialects
 from ..database.sql_identifiers import quote_mysql_identifier
 from ..database.capabilities import supported_database_type_values
 from ..config.config_manager import ConfigManager
@@ -57,7 +55,54 @@ _LOCKING_READ_CLAUSES = (
     ("FOR", "KEY", "SHARE"),
     ("LOCK", "IN", "SHARE", "MODE"),
 )
-_DOLLAR_QUOTE_PATTERN = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
+
+
+async def _run_db_call(callable_obj, *args, **kwargs):
+    """Run one blocking database operation outside the MCP event loop."""
+    return await asyncio.to_thread(callable_obj, *args, **kwargs)
+
+
+async def _run_db_query(connection_id: str, query: str, params: Optional[tuple] = None):
+    """Execute SQL in a worker while preserving the two-argument call contract."""
+    if params is None:
+        return await _run_db_call(connection_manager.execute_query, connection_id, query)
+    return await _run_db_call(connection_manager.execute_query, connection_id, query, params)
+
+
+async def _run_async_db_call(callable_obj, *args, **kwargs):
+    """Run an async analyzer in a worker when its internals perform blocking I/O."""
+    def run():
+        return asyncio.run(callable_obj(*args, **kwargs))
+
+    return await _run_db_call(run)
+
+
+def _connect_and_probe(config: DatabaseConfig) -> tuple[str, str]:
+    """Create a connection and perform the initial blocking connectivity probe."""
+    connection_id = connection_manager.create_connection(config)
+    connection_manager.get_connection(connection_id)
+    server_info = ""
+    try:
+        if config.type == DatabaseType.MYSQL:
+            with connection_manager.get_cursor(connection_id) as cursor:
+                cursor.execute("SELECT VERSION() as version")
+                result = cursor.fetchone()
+                if result:
+                    version = result[0] if isinstance(result, tuple) else result["version"]
+                    server_info = f"MySQL {version}"
+        elif config.type == DatabaseType.POSTGRESQL:
+            with connection_manager.get_cursor(connection_id) as cursor:
+                cursor.execute("SELECT version() AS version")
+                result = cursor.fetchone()
+                if result:
+                    version = result[0] if isinstance(result, tuple) else result["version"]
+                    server_info = f"PostgreSQL {version}"
+        elif config.type == DatabaseType.SQLITE:
+            server_info = "SQLite"
+    except Exception as exc:
+        logger.warning("Could not get server info: %s", exc)
+        server_info = f"{config.type.value} (version unknown)"
+    return connection_id, server_info
 
 
 def _resolve_codegen_output_path(base_dir: Path, relative_path: object) -> Path:
@@ -93,6 +138,12 @@ def _display_codegen_path(path: Path, project_root: Path) -> str:
         return str(path.absolute())
 
 
+def _write_codegen_file(path: Path, code: str) -> None:
+    """Create the parent directory and write one generated file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(code, encoding="utf-8")
+
+
 def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
     """Tokenize enough SQL to enforce the single, read-only statement contract."""
     tokens: List[tuple[str, str]] = []
@@ -107,17 +158,6 @@ def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
 
         if query.startswith("/*", index) or query.startswith("--", index) or char == "#":
             raise MCPServiceError("SQL comments are not allowed in read-only queries")
-
-        dollar_quote = _DOLLAR_QUOTE_PATTERN.match(query, index)
-        if dollar_quote:
-            delimiter = dollar_quote.group(0)
-            end = query.find(delimiter, dollar_quote.end())
-            if end < 0:
-                raise MCPServiceError("Unterminated dollar-quoted value in SQL query")
-            end += len(delimiter)
-            tokens.append(("quoted", query[index:end]))
-            index = end
-            continue
 
         if char in "'\"`":
             quote = char
@@ -196,13 +236,6 @@ def _validate_read_only_query(query: Any) -> str:
     if _contains_locking_read_clause(tokens):
         raise MCPServiceError("Only non-locking read-only SELECT queries are allowed")
 
-    if re.search(
-        r"\bFETCH\s+(?:FIRST|NEXT)\s+\d+\s+ROWS?\s+WITH\s+TIES\b",
-        _mask_sql_literals(normalized),
-        re.IGNORECASE,
-    ):
-        raise MCPServiceError("FETCH WITH TIES is not supported because it can exceed the row limit")
-
     depth = 0
     top_level_select = first_word == "SELECT"
     for kind, value in tokens:
@@ -231,8 +264,19 @@ def _validate_read_only_query(query: Any) -> str:
 
 
 def _has_top_level_limit_clause(query: str) -> bool:
-    """Return whether a query contains a cap understood by the rewriter."""
-    return _top_level_limit_span(query) is not None
+    tokens = _tokenize_read_only_sql(query)
+    depth = 0
+    for index, (kind, value) in enumerate(tokens):
+        if kind == "symbol":
+            if value == "(":
+                depth += 1
+            elif value == ")":
+                depth -= 1
+        elif kind == "word" and value == "LIMIT" and depth == 0:
+            next_token = tokens[index + 1] if index + 1 < len(tokens) else None
+            if next_token and (next_token[0] == "symbol" or next_token[1] == "ALL"):
+                return True
+    return False
 
 
 def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
@@ -242,7 +286,30 @@ def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
     cannot affect the server-side result cap. The optional ``LIMIT offset,count``
     form returns the row-count span rather than the offset span.
     """
-    masked_query = _mask_sql_literals(query)
+    masked = list(query)
+    index = 0
+    while index < len(masked):
+        if masked[index] not in "'\"`":
+            index += 1
+            continue
+        quote = masked[index]
+        index += 1
+        while index < len(masked):
+            masked[index] = " "
+            if query[index] == quote:
+                if index + 1 < len(masked) and query[index + 1] == quote:
+                    masked[index + 1] = " "
+                    index += 2
+                    continue
+                index += 1
+                break
+            if query[index] == "\\" and quote == "'" and index + 1 < len(masked):
+                masked[index + 1] = " "
+                index += 2
+                continue
+            index += 1
+
+    masked_query = "".join(masked)
 
     def is_top_level(position: int) -> bool:
         depth = 0
@@ -263,55 +330,7 @@ def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
         if is_top_level(match.start()):
             value = match.group(1).upper()
             return match.start(1), match.end(1), None if value == "ALL" else int(value)
-
-    fetch_form = re.compile(
-        r"\bFETCH\s+(?:FIRST|NEXT)\s+(\d+)\s+ROWS?\s+ONLY\b", re.IGNORECASE
-    )
-    for match in fetch_form.finditer(masked_query):
-        if is_top_level(match.start()):
-            return match.start(1), match.end(1), int(match.group(1))
     return None
-
-
-def _mask_sql_literals(query: str) -> str:
-    """Replace quoted SQL literals with spaces while preserving offsets."""
-    masked = list(query)
-    index = 0
-    while index < len(masked):
-        dollar_quote = _DOLLAR_QUOTE_PATTERN.match(query, index)
-        if dollar_quote:
-            delimiter = dollar_quote.group(0)
-            end = query.find(delimiter, dollar_quote.end())
-            if end < 0:
-                for position in range(index, len(masked)):
-                    masked[position] = " "
-                break
-            end += len(delimiter)
-            for position in range(index, end):
-                masked[position] = " "
-            index = end
-            continue
-
-        if masked[index] not in "'\"`":
-            index += 1
-            continue
-        quote = masked[index]
-        index += 1
-        while index < len(masked):
-            masked[index] = " "
-            if query[index] == quote:
-                if index + 1 < len(masked) and query[index + 1] == quote:
-                    masked[index + 1] = " "
-                    index += 2
-                    continue
-                index += 1
-                break
-            if query[index] == "\\" and quote == "'" and index + 1 < len(masked):
-                masked[index + 1] = " "
-                index += 2
-                continue
-            index += 1
-    return "".join(masked)
 
 
 def _apply_query_limit(query: str, limit: int) -> str:
@@ -332,66 +351,6 @@ def _quote_mysql_identifier(identifier: Any) -> str:
         return quote_mysql_identifier(identifier)
     except ValueError as exc:
         raise MCPServiceError(str(exc)) from exc
-
-
-async def _run_db_call(callable_obj, *args):
-    """Run one blocking database operation outside the MCP event loop."""
-    return await asyncio.to_thread(callable_obj, *args)
-
-
-async def _run_async_db_call(callable_obj, *args, **kwargs):
-    """Run an async analyzer whose internals contain blocking DB calls in a worker."""
-    def run() -> Any:
-        return asyncio.run(callable_obj(*args, **kwargs))
-
-    return await asyncio.to_thread(run)
-
-
-def _connect_and_probe(config: DatabaseConfig) -> tuple[str, str]:
-    """Create a connection and perform the initial blocking connectivity probe."""
-    connection_id = connection_manager.create_connection(config)
-    connection_manager.get_connection(connection_id)
-    server_info = ""
-    try:
-        if config.type == DatabaseType.MYSQL:
-            with connection_manager.get_cursor(connection_id) as cursor:
-                cursor.execute("SELECT VERSION() as version")
-                result = cursor.fetchone()
-                if result:
-                    server_info = f"MySQL {result[0] if isinstance(result, tuple) else result['version']}"
-        elif config.type == DatabaseType.POSTGRESQL:
-            with connection_manager.get_cursor(connection_id) as cursor:
-                cursor.execute("SELECT version() AS version")
-                result = cursor.fetchone()
-                if result:
-                    server_info = (
-                        f"PostgreSQL {result[0] if isinstance(result, tuple) else result['version']}"
-                    )
-        elif config.type == DatabaseType.SQLITE:
-            server_info = "SQLite"
-    except Exception as exc:
-        logger.warning("Could not get server info: %s", exc)
-        server_info = f"{config.type.value} (version unknown)"
-    return connection_id, server_info
-
-
-def _collect_all_table_names(connection_id: str, config: DatabaseConfig) -> List[str]:
-    """Collect table names for codegen prefix analysis inside a DB worker."""
-    try:
-        with connection_manager.get_cursor(connection_id) as cursor:
-            if config.type == DatabaseType.MYSQL:
-                cursor.execute("SHOW TABLES")
-            elif config.type == DatabaseType.SQLITE:
-                cursor.execute(
-                    "SELECT name FROM sqlite_master "
-                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                )
-            else:
-                return []
-            return [row[0] for row in cursor.fetchall()]
-    except Exception as exc:
-        logger.warning("Failed to get all table names for prefix analysis: %s", exc)
-        return []
 
 
 def get_connection_tools() -> List[Tool]:
@@ -443,7 +402,23 @@ def get_connection_tools() -> List[Tool]:
                 "required": ["host", "port", "username", "password", "database_type"]
             }
         ),
-        
+
+        Tool(
+            name="db_disconnect",
+            description="Close an existing database connection session",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "connection_id": {
+                        "type": "string",
+                        "description": "Connection identifier returned by db_connect_test",
+                        "minLength": 1,
+                    }
+                },
+                "required": ["connection_id"],
+            },
+        ),
+
         Tool(
             name="db_query_databases",
             description="List all databases on the server",
@@ -707,7 +682,6 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
             charset=arguments.get("charset", "utf8mb4")
         )
         
-        # Connection setup and the initial probe are blocking driver calls.
         connection_id, server_info = await _run_db_call(_connect_and_probe, config)
         
         response = {
@@ -757,6 +731,66 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
         )]
 
 
+async def handle_db_disconnect(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Close a connection session and return a stable lifecycle response."""
+    raw_connection_id = arguments.get("connection_id") if isinstance(arguments, dict) else None
+    connection_id = raw_connection_id.strip() if isinstance(raw_connection_id, str) else ""
+
+    if not connection_id:
+        response = {
+            "success": False,
+            "error": "connection_not_found",
+            "connection_id": None,
+            "message": "Connection not found",
+        }
+        return [TextContent(
+            type="text",
+            text=f"Failed to disconnect connection: {response['message']}\n\n"
+                 f"Raw Response: {_json_dumps(response, ensure_ascii=False)}",
+        )]
+
+    try:
+        closed = await _run_db_call(connection_manager.close_connection, connection_id)
+    except Exception as exc:
+        safe_error = redact_sensitive_text(exc)
+        logger.error("Unexpected error in db_disconnect: %s", safe_error)
+        response = {
+            "success": False,
+            "error": "disconnect_failed",
+            "connection_id": connection_id,
+            "message": safe_error,
+        }
+        return [TextContent(
+            type="text",
+            text=f"Failed to disconnect connection: {safe_error}\n\n"
+                 f"Raw Response: {_json_dumps(response, ensure_ascii=False)}",
+        )]
+
+    if not closed:
+        response = {
+            "success": False,
+            "error": "connection_not_found",
+            "connection_id": connection_id,
+            "message": "Connection not found",
+        }
+        return [TextContent(
+            type="text",
+            text=f"Failed to disconnect connection: {response['message']}\n\n"
+                 f"Raw Response: {_json_dumps(response, ensure_ascii=False)}",
+        )]
+
+    response = {
+        "success": True,
+        "connection_id": connection_id,
+        "message": "Connection closed successfully",
+    }
+    return [TextContent(
+        type="text",
+        text=f"Database connection closed.\n\nRaw Response: "
+             f"{_json_dumps(response, ensure_ascii=False)}",
+    )]
+
+
 async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextContent]:
     """
     Handle listing databases
@@ -800,7 +834,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
         else:
             raise MCPServiceError(f"Listing databases not implemented for {config.type}")
         
-        results = await _run_db_call(connection_manager.execute_query, connection_id, query)
+        results = await _run_db_query(connection_id, query)
         
         # Extract database names
         databases = []
@@ -891,9 +925,9 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
             raise MCPServiceError(f"Listing tables not implemented for {config.type}")
         
         if params is None:
-            results = await _run_db_call(connection_manager.execute_query, connection_id, query)
+            results = await _run_db_query(connection_id, query)
         else:
-            results = await _run_db_call(connection_manager.execute_query, connection_id, query, params)
+            results = await _run_db_query(connection_id, query, params)
         
         # Extract table names
         tables = []
@@ -979,9 +1013,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
             FROM information_schema.TABLES
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
             """
-            results = await _run_db_call(
-                connection_manager.execute_query, connection_id, query, (database, table)
-            )
+            results = await _run_db_query(connection_id, query, (database, table))
 
         elif config.type == DatabaseType.POSTGRESQL:
             schema_filter = "AND table_schema = %s" if schema else ""
@@ -994,7 +1026,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
               {schema_filter}
             """.format(schema_filter=schema_filter)
             params = (database, table, schema) if schema else (database, table)
-            results = await _run_db_call(connection_manager.execute_query, connection_id, query, params)
+            results = await _run_db_query(connection_id, query, params)
             
         elif config.type == DatabaseType.SQLITE:
             query = """
@@ -1002,7 +1034,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
             FROM sqlite_master 
             WHERE type='table' AND name = ?
             """
-            results = await _run_db_call(connection_manager.execute_query, connection_id, query, (table,))
+            results = await _run_db_query(connection_id, query, (table,))
             
         else:
             raise MCPServiceError(f"Table existence check not implemented for {config.type}")
@@ -1070,7 +1102,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
 
         query = _apply_query_limit(query, limit)
 
-        results = await _run_db_call(connection_manager.execute_query, connection_id, query)
+        results = await _run_db_query(connection_id, query)
         
         response = {
             "success": True,
@@ -1097,7 +1129,9 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         else:
             result_text = "Query executed successfully. No rows returned."
         
-        result_text += "\n\nRaw Response: " + _json_dumps(response)
+        result_text += "\n\nRaw Response: " + _json_dumps(
+            response, ensure_ascii=False
+        )
         
         return [TextContent(
             type="text",
@@ -1140,15 +1174,30 @@ def _get_java_type_mapping(db_type: DatabaseType, column_type: str, precision: O
         
     Returns:
         Dict with java_type and imports
+
+    Supported runtime dialects use the same adapter as code generation. The
+    legacy YAML mapping remains a fallback for dialects without a registered
+    runtime adapter.
     """
     try:
+        db_key = (
+            db_type.value.lower()
+            if isinstance(db_type, DatabaseType)
+            else str(db_type).lower()
+        )
+        if db_key in list_supported_dialects():
+            dialect = get_dialect(db_key)
+            return {
+                "java_type": dialect.java_type_for(column_type),
+                "imports": dialect.java_imports_for(column_type),
+            }
+
         config_manager = ConfigManager()
         if hasattr(config_manager, "get_type_mapping"):
             type_mapping = config_manager.get_type_mapping()
         else:
             type_mapping = _load_default_type_mapping()
         
-        db_key = db_type.value.lower()
         column_type_upper = column_type.upper().strip()
         base_type = re.sub(r"\([^)]*\)", "", column_type_upper)
         base_type = re.sub(r"\s+", " ", base_type).strip()
@@ -1286,7 +1335,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
             for imp in sorted(java_imports):
                 result_text += f"import {imp};\n"
         
-        result_text += f"\nRaw Response: {_json_dumps(response)}"
+        result_text += f"\nRaw Response: {_json_dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1356,9 +1405,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
             ORDER BY ORDINAL_POSITION
             """
-            results = await _run_db_call(
-                connection_manager.execute_query, connection_id, query, (database, table)
-            )
+            results = await _run_db_query(connection_id, query, (database, table))
 
         elif config.type == DatabaseType.POSTGRESQL:
             columns = await _run_db_call(
@@ -1430,7 +1477,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
                 result_text += f"  Comment: {row['COLUMN_COMMENT']}\n"
             result_text += "\n"
         
-        result_text += f"Raw Response: {_json_dumps(response)}"
+        result_text += f"Raw Response: {_json_dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1494,9 +1541,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
               AND CONSTRAINT_NAME = 'PRIMARY'
             ORDER BY ORDINAL_POSITION
             """
-            results = await _run_db_call(
-                connection_manager.execute_query, connection_id, query, (database, table)
-            )
+            results = await _run_db_query(connection_id, query, (database, table))
 
         elif config.type == DatabaseType.POSTGRESQL:
             primary_keys = await _run_db_call(
@@ -1540,7 +1585,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         else:
             result_text = f"No primary keys found for table {database}.{table}\n"
         
-        result_text += f"\nRaw Response: {_json_dumps(response)}"
+        result_text += f"\nRaw Response: {_json_dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1612,9 +1657,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
               AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
             ORDER BY kcu.ORDINAL_POSITION
             """
-            results = await _run_db_call(
-                connection_manager.execute_query, connection_id, query, (database, table)
-            )
+            results = await _run_db_query(connection_id, query, (database, table))
 
         elif config.type == DatabaseType.POSTGRESQL:
             foreign_keys = await _run_db_call(
@@ -1690,7 +1733,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         else:
             result_text = f"No foreign keys found for table {database}.{table}\n"
         
-        result_text += f"Raw Response: {_json_dumps(response)}"
+        result_text += f"Raw Response: {_json_dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1758,9 +1801,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
               AND TABLE_NAME = %s
             ORDER BY INDEX_NAME, SEQ_IN_INDEX
             """
-            results = await _run_db_call(
-                connection_manager.execute_query, connection_id, query, (database, table)
-            )
+            results = await _run_db_query(connection_id, query, (database, table))
 
         elif config.type == DatabaseType.POSTGRESQL:
             indexes = await _run_db_call(
@@ -1854,7 +1895,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         else:
             result_text = f"No indexes found for table {database}.{table}\n"
         
-        result_text += f"Raw Response: {_json_dumps(response)}"
+        result_text += f"Raw Response: {_json_dumps(response, ensure_ascii=False)}"
         
         return [TextContent(
             type="text",
@@ -1934,6 +1975,16 @@ def get_codegen_tools() -> List[Tool]:
                         "description": "Java package name for generated code",
                         "default": "com.example.generated"
                     },
+                    "generate_dto": {
+                        "type": "boolean",
+                        "description": "Generate a DTO artifact when supported",
+                        "default": False
+                    },
+                    "generate_vo": {
+                        "type": "boolean",
+                        "description": "Generate a VO artifact when supported",
+                        "default": False
+                    },
                     "project_path": {
                         "type": "string",
                         "description": "Target Spring Boot project path (with src/main/java)",
@@ -1995,6 +2046,16 @@ def get_codegen_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Optional explicit output directory; defaults to the project source structure"
                     },
+                    "generate_dto": {
+                        "type": "boolean",
+                        "description": "Generate a DTO artifact when supported",
+                        "default": False
+                    },
+                    "generate_vo": {
+                        "type": "boolean",
+                        "description": "Generate a VO artifact when supported",
+                        "default": False
+                    },
                     "include_swagger": {
                         "type": "boolean",
                         "description": "Include Swagger annotations in generated code",
@@ -2037,6 +2098,8 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         template_category = arguments.get("template_category", "MybatisPlus-Mixed")
         author = arguments.get("author", "ZXP")
         package_name = arguments.get("package_name", "com.example.generated")
+        generate_dto = arguments.get("generate_dto")
+        generate_vo = arguments.get("generate_vo")
         
         # Validate connection exists
         config = connection_manager.get_connection_info(connection_id)
@@ -2074,6 +2137,13 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
             "isMybatisPlusMixed": template_category == "MybatisPlus-Mixed",
             "isSb35Java21": template_category == "sb35-java21",
         })
+        from ..generator.template_context import apply_generation_options
+
+        apply_generation_options(
+            analysis_result["template_context"],
+            generate_dto=generate_dto,
+            generate_vo=generate_vo,
+        )
         
         # Format response text
         result_text = f"Code Generation Analysis: {table_name}\n"
@@ -2122,7 +2192,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         
         # Keep a structured payload for non-MCP callers such as the CLI.
         result_text += "\n\nRaw Response: " + _json_dumps(
-            {"success": True, **analysis_result}
+            {"success": True, **analysis_result}, ensure_ascii=False
         )
         
         return [TextContent(
@@ -2178,6 +2248,8 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         include_swagger = arguments.get("include_swagger", True)
         include_lombok = arguments.get("include_lombok", True)
         include_mapstruct = arguments.get("include_mapstruct", True)
+        generate_dto = arguments.get("generate_dto")
+        generate_vo = arguments.get("generate_vo")
         project_path = arguments.get("project_path")
         output_dir_arg = arguments.get("output_dir")
         
@@ -2255,13 +2327,10 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # ===== STEP 1: 获取数据库所有表名以支持前缀分析 =====
         logger.info("🔍 Getting all table names for package structure optimization...")
-        
-        # 获取数据库中的所有表名用于前缀分析
-        config = connection_manager.get_connection_info(connection_id)
-        all_table_names = await _run_db_call(_collect_all_table_names, connection_id, config)
-        if not all_table_names:
-            all_table_names = [table_name]
-        logger.info("Found %s tables for prefix analysis: %s", len(all_table_names), all_table_names)
+        all_table_names = await _run_db_call(
+            _collect_codegen_table_names, connection_id, table_name
+        )
+        logger.info(f"Found {len(all_table_names)} tables for prefix analysis: {all_table_names}")
         
         # ===== STEP 2: 分析表结构（包含前缀优化） =====
         # Initialize analyzer and generator
@@ -2326,12 +2395,22 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                 ctx["hasJakarta"] = False
         except Exception:
             pass
-        
-        # ===== STEP 3: 生成代码 ===== 
+
+        from ..generator.template_context import apply_generation_options
+
+        apply_generation_options(
+            analysis_result["template_context"],
+            generate_dto=generate_dto,
+            generate_vo=generate_vo,
+        )
+
+        # ===== STEP 3: 生成代码 =====
         generation_config = {
             "author": author,
             "package_name": package_name,
-            "output_dir": output_dir_arg or "generated_output"
+            "output_dir": output_dir_arg or "generated_output",
+            "generate_dto": generate_dto,
+            "generate_vo": generate_vo,
         }
         
         generation_result = await generator.generate_code(
@@ -2403,6 +2482,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                     )
                 except ValueError as path_error:
                     file_info["write_error"] = f"Unsafe output path: {path_error}"
+                    file_info["write_error_kind"] = "unsafe_path"
                     logger.warning(
                         "Rejected generated file path %r for %s: %s",
                         raw_relative_path,
@@ -2411,22 +2491,18 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
                     )
                     continue
 
-                if output_dir == resources_dir:
-                    resource_files.append(str(full_output_path))
-                else:
-                    written_files.append(str(full_output_path))
-                
-                # 确保父目录存在
-                full_output_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                # 写入文件
+                # Register a path only after both directory creation and the write succeed.
                 try:
-                    with open(full_output_path, 'w', encoding='utf-8') as f:
-                        f.write(file_info["code"])
+                    _write_codegen_file(full_output_path, file_info["code"])
+                    if output_dir == resources_dir:
+                        resource_files.append(str(full_output_path))
+                    else:
+                        written_files.append(str(full_output_path))
                     logger.info(f"Successfully wrote file: {full_output_path}")
                 except Exception as write_error:
                     logger.error(f"Failed to write file {full_output_path}: {write_error}")
                     file_info["write_error"] = str(write_error)
+                    file_info["write_error_kind"] = "write_failed"
         
         # ===== STEP 5: 格式化增强响应（包含包结构优化信息） =====
         result_text = f"🚀 Code Generation Complete: {table_name}\n"
@@ -2505,7 +2581,12 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
             if "error" in file_info:
                 result_text += f"  ❌ {template_file}: {file_info['error']}\n"
             elif "write_error" in file_info:
-                result_text += f"  ⚠️ {file_info['filename']}: Generated but write failed - {file_info['write_error']}\n"
+                error_kind = file_info.get("write_error_kind", "write_failed")
+                label = "Path rejected" if error_kind == "unsafe_path" else "Write failed"
+                result_text += (
+                    f"  ⚠️ {file_info['filename']}: Generated but {label.lower()} - "
+                    f"{file_info['write_error']}\n"
+                )
             else:
                 filename = file_info["filename"]
                 code_lines = len(file_info["code"].split('\n'))
@@ -2523,14 +2604,39 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         
         # 文件统计
         total_written = len(written_files) + len(resource_files)
+        write_candidate_count = sum("error" not in file_info for file_info in generated_files.values())
+        path_rejected_count = sum(
+            file_info.get("write_error_kind") == "unsafe_path"
+            for file_info in generated_files.values()
+        )
+        write_failure_count = sum(
+            file_info.get("write_error_kind") == "write_failed"
+            for file_info in generated_files.values()
+        )
+        write_attempt_count = write_candidate_count - path_rejected_count
         result_text += "\n📈 File Writing Summary:\n"
+        result_text += f"  Write Candidates: {write_candidate_count}\n"
+        result_text += f"  Write Attempts: {write_attempt_count}\n"
+        result_text += f"  Write Succeeded: {total_written}\n"
+        result_text += f"  Paths Rejected: {path_rejected_count}\n"
+        result_text += f"  Write Failed: {write_failure_count}\n"
         result_text += f"  Java Files: {java_file_count} written to {java_source_dir.absolute()}\n"
         result_text += f"  Resource Files: {resource_file_count} written to {resources_dir.absolute()}\n"
         result_text += f"  Total Files: {total_written}\n"
-        
-        if total_written > 0:
+
+        generation_failure_count = stats["error_files"]
+        if (
+            generation_failure_count == 0
+            and path_rejected_count == 0
+            and write_failure_count == 0
+            and total_written == write_candidate_count
+        ):
             result_text += "\n🎉 SUCCESS: All files written to SpringBoot project structure!\n"
             result_text += f"📁 Working Directory: {Path.cwd().absolute()}\n"
+        elif total_written > 0:
+            result_text += "\n⚠️ PARTIAL: Some generated files were not written. Review the file errors above.\n"
+        else:
+            result_text += "\n❌ FAILED: No generated files were written. Review the file errors above.\n"
         
         # 简化的代码预览（仅显示文件名，不显示完整代码）
         result_text += "\n📝 Generated Code Preview:\n"
@@ -2649,6 +2755,16 @@ def _detect_project_structure(project_path: Optional[str] = None) -> Dict[str, P
     """Resolve project structure from an explicit path or the current directory."""
     start_dir = Path(project_path).expanduser() if project_path else None
     return detect_springboot_project_structure(start_dir)
+
+
+def _collect_codegen_table_names(connection_id: str, fallback_table: str) -> List[str]:
+    """Collect table names through the shared introspection contract."""
+    try:
+        table_names = DatabaseIntrospector(connection_manager).list_tables(connection_id)
+        return table_names or [fallback_table]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to get all table names for prefix analysis: %s", exc)
+        return [fallback_table]
 
 
 def get_springboot_project_tools() -> List[Tool]:

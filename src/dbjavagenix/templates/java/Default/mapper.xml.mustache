@@ -55,12 +55,12 @@
     </select>
 
     <!--新增所有列-->
-    <insert id="insert" keyProperty="{{primaryKeyName}}" useGeneratedKeys="true">
+    <insert id="insert"{{#primaryKey.isAutoIncrement}} keyProperty="{{primaryKey.javaName}}" useGeneratedKeys="true"{{/primaryKey.isAutoIncrement}}>
         insert into {{tableName}}({{#otherColumns}}{{name}}{{#hasNext}}, {{/hasNext}}{{/otherColumns}})
         values ({{#otherColumns}}#{ {{javaName}} }{{#hasNext}}, {{/hasNext}}{{/otherColumns}})
     </insert>
 
-    <insert id="insertBatch" keyProperty="{{primaryKeyName}}" useGeneratedKeys="true">
+    <insert id="insertBatch"{{#primaryKey.isAutoIncrement}} keyProperty="{{primaryKey.javaName}}" useGeneratedKeys="true"{{/primaryKey.isAutoIncrement}}>
         insert into {{tableName}}({{#otherColumns}}{{name}}{{#hasNext}}, {{/hasNext}}{{/otherColumns}})
         values
         <foreach collection="entities" item="entity" separator=",">
@@ -68,7 +68,7 @@
         </foreach>
     </insert>
 
-    <insert id="insertOrUpdateBatch" keyProperty="{{primaryKeyName}}" useGeneratedKeys="true">
+    <insert id="insertOrUpdateBatch"{{#primaryKey.isAutoIncrement}} keyProperty="{{primaryKey.javaName}}" useGeneratedKeys="true"{{/primaryKey.isAutoIncrement}}>
         insert into {{tableName}}({{#otherColumns}}{{name}}{{#hasNext}}, {{/hasNext}}{{/otherColumns}})
         values
         <foreach collection="entities" item="entity" separator=",">

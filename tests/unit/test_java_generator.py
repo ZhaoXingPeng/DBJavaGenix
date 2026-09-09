@@ -115,13 +115,51 @@ class TestPathResolution:
         assert "generated" in path
         assert path.endswith("brand_new.java")
 
+    def test_empty_package_suffix_does_not_create_empty_path_segment(
+        self, gen, simple_table, gen_config
+    ):
+        from dbjavagenix.generator.template_context import TemplateContextBuilder
+
+        context = TemplateContextBuilder(
+            author=gen_config.author, package_name=gen_config.package_name
+        ).build_context(simple_table, "Default")
+        path = gen._get_output_path("entity.mustache", context, gen_config.output_dir)
+
+        relative = Path(path).relative_to(Path(gen_config.output_dir)).as_posix()
+        assert relative == "entity/Account.java"
+
+    def test_package_suffix_remains_a_distinct_path_segment(self, gen, gen_config):
+        from dbjavagenix.generator.template_context import TemplateContextBuilder
+
+        table = TableInfo(
+            name="sys_account",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="id",
+                    data_type="BIGINT",
+                    java_type="Long",
+                    primary_key=True,
+                )
+            ],
+        )
+        context = TemplateContextBuilder(
+            author=gen_config.author, package_name=gen_config.package_name
+        ).build_context(
+            table,
+            "Default",
+            all_table_names=["sys_account", "sys_role"],
+        )
+        path = gen._get_output_path("entity.mustache", context, gen_config.output_dir)
+
+        relative = Path(path).relative_to(Path(gen_config.output_dir)).as_posix()
+        assert relative == "entity/system/SysAccount.java"
+
 
 class TestRealGeneration:
     """跑一次真实生成, 验证文件产生且包含关键 token"""
 
-    def test_default_generates_entity_dao_service_controller(
-        self, gen, simple_table, gen_config
-    ):
+    def test_default_generates_entity_dao_service_controller(self, gen, simple_table, gen_config):
         output_dir = gen_config.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         result = gen.generate_from_table(
@@ -136,6 +174,7 @@ class TestRealGeneration:
         # 文件实际存在
         entity_path = Path(result["entity.mustache"])
         assert entity_path.exists()
+        assert entity_path.relative_to(Path(output_dir)).as_posix() == "entity/Account.java"
         content = entity_path.read_text(encoding="utf-8")
         assert "class Account" in content
         assert "private Long id" in content
@@ -153,9 +192,7 @@ class TestRealGeneration:
         dto_content = Path(result["dto.mustache"]).read_text(encoding="utf-8")
         assert "public record AccountDTO" in dto_content
 
-    def test_sb35_java21_entity_is_class_not_record(
-        self, gen, simple_table, gen_config
-    ):
+    def test_sb35_java21_entity_is_class_not_record(self, gen, simple_table, gen_config):
         """回归测试: P1.2 修复后 sb35-java21 entity 应为 class (JPA 兼容), 不是 record"""
         output_dir = gen_config.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)

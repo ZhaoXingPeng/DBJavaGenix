@@ -223,6 +223,11 @@ class DependencyRequirements:
         Returns:
             按类别分组的依赖需求字典
         """
+
+        # Version adaptation mutates dependency descriptors for compatibility
+        # with the existing public helper. Rebuild the catalog for every
+        # analysis so a previous project cannot affect this result.
+        self._initialize_dependency_catalog()
         
         # 根据Spring Boot版本调整依赖版本
         if spring_boot_version:
