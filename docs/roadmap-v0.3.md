@@ -44,6 +44,10 @@
   返回值的 Raw Response JSON 序列化。特殊标识符、空结果和表达式/复合键的更多真实跨方言组合、
   未记录的锁语法、查询资源限制与其他 MCP handler 仍未形成完整合同。
 
+  当前分支补充 PostgreSQL dollar-quoted literal 的 tokenizer 支持，并将 PostgreSQL/SQLite
+  的 `FETCH FIRST/NEXT ... ONLY` 纳入结果上限重写；`WITH TIES` 在无法证明不超限时明确拒绝。
+  该项仍需真实方言实例验证，当前只计入本地回归证据。
+
 ## 优先级路线
 
 优先级只表示依赖关系，不代表预先承诺实现结果。每项工作开始前都要创建独立 Issue。

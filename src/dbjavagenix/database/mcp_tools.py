@@ -55,6 +55,7 @@ _LOCKING_READ_CLAUSES = (
     ("FOR", "KEY", "SHARE"),
     ("LOCK", "IN", "SHARE", "MODE"),
 )
+_DOLLAR_QUOTE_PATTERN = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
 
 
 def _query_result_json_default(value: object) -> object:
@@ -122,6 +123,17 @@ def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
 
         if query.startswith("/*", index) or query.startswith("--", index) or char == "#":
             raise MCPServiceError("SQL comments are not allowed in read-only queries")
+
+        dollar_quote = _DOLLAR_QUOTE_PATTERN.match(query, index)
+        if dollar_quote:
+            delimiter = dollar_quote.group(0)
+            end = query.find(delimiter, dollar_quote.end())
+            if end < 0:
+                raise MCPServiceError("Unterminated dollar-quoted value in SQL query")
+            end += len(delimiter)
+            tokens.append(("quoted", query[index:end]))
+            index = end
+            continue
 
         if char in "'\"`":
             quote = char
@@ -200,6 +212,13 @@ def _validate_read_only_query(query: Any) -> str:
     if _contains_locking_read_clause(tokens):
         raise MCPServiceError("Only non-locking read-only SELECT queries are allowed")
 
+    if re.search(
+        r"\bFETCH\s+(?:FIRST|NEXT)\s+\d+\s+ROWS?\s+WITH\s+TIES\b",
+        _mask_sql_literals(normalized),
+        re.IGNORECASE,
+    ):
+        raise MCPServiceError("FETCH WITH TIES is not supported because it can exceed the row limit")
+
     depth = 0
     top_level_select = first_word == "SELECT"
     for kind, value in tokens:
@@ -228,19 +247,8 @@ def _validate_read_only_query(query: Any) -> str:
 
 
 def _has_top_level_limit_clause(query: str) -> bool:
-    tokens = _tokenize_read_only_sql(query)
-    depth = 0
-    for index, (kind, value) in enumerate(tokens):
-        if kind == "symbol":
-            if value == "(":
-                depth += 1
-            elif value == ")":
-                depth -= 1
-        elif kind == "word" and value == "LIMIT" and depth == 0:
-            next_token = tokens[index + 1] if index + 1 < len(tokens) else None
-            if next_token and (next_token[0] == "symbol" or next_token[1] == "ALL"):
-                return True
-    return False
+    """Return whether a query contains a cap understood by the rewriter."""
+    return _top_level_limit_span(query) is not None
 
 
 def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
@@ -250,30 +258,7 @@ def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
     cannot affect the server-side result cap. The optional ``LIMIT offset,count``
     form returns the row-count span rather than the offset span.
     """
-    masked = list(query)
-    index = 0
-    while index < len(masked):
-        if masked[index] not in "'\"`":
-            index += 1
-            continue
-        quote = masked[index]
-        index += 1
-        while index < len(masked):
-            masked[index] = " "
-            if query[index] == quote:
-                if index + 1 < len(masked) and query[index + 1] == quote:
-                    masked[index + 1] = " "
-                    index += 2
-                    continue
-                index += 1
-                break
-            if query[index] == "\\" and quote == "'" and index + 1 < len(masked):
-                masked[index + 1] = " "
-                index += 2
-                continue
-            index += 1
-
-    masked_query = "".join(masked)
+    masked_query = _mask_sql_literals(query)
 
     def is_top_level(position: int) -> bool:
         depth = 0
@@ -294,7 +279,55 @@ def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
         if is_top_level(match.start()):
             value = match.group(1).upper()
             return match.start(1), match.end(1), None if value == "ALL" else int(value)
+
+    fetch_form = re.compile(
+        r"\bFETCH\s+(?:FIRST|NEXT)\s+(\d+)\s+ROWS?\s+ONLY\b", re.IGNORECASE
+    )
+    for match in fetch_form.finditer(masked_query):
+        if is_top_level(match.start()):
+            return match.start(1), match.end(1), int(match.group(1))
     return None
+
+
+def _mask_sql_literals(query: str) -> str:
+    """Replace quoted SQL literals with spaces while preserving offsets."""
+    masked = list(query)
+    index = 0
+    while index < len(masked):
+        dollar_quote = _DOLLAR_QUOTE_PATTERN.match(query, index)
+        if dollar_quote:
+            delimiter = dollar_quote.group(0)
+            end = query.find(delimiter, dollar_quote.end())
+            if end < 0:
+                for position in range(index, len(masked)):
+                    masked[position] = " "
+                break
+            end += len(delimiter)
+            for position in range(index, end):
+                masked[position] = " "
+            index = end
+            continue
+
+        if masked[index] not in "'\"`":
+            index += 1
+            continue
+        quote = masked[index]
+        index += 1
+        while index < len(masked):
+            masked[index] = " "
+            if query[index] == quote:
+                if index + 1 < len(masked) and query[index + 1] == quote:
+                    masked[index + 1] = " "
+                    index += 2
+                    continue
+                index += 1
+                break
+            if query[index] == "\\" and quote == "'" and index + 1 < len(masked):
+                masked[index + 1] = " "
+                index += 2
+                continue
+            index += 1
+    return "".join(masked)
 
 
 def _apply_query_limit(query: str, limit: int) -> str:
