@@ -72,12 +72,14 @@ class TestBuildCodeDiffData:
         target.parent.mkdir(parents=True)
         target.write_text("public class User { /* old */ }", encoding="utf-8")
 
-        files = [{
-            "template_file": "entity.mustache",
-            "file_path": target_rel,
-            "code": "public class User { /* new */ }",
-            "lines": 1,
-        }]
+        files = [
+            {
+                "template_file": "entity.mustache",
+                "file_path": target_rel,
+                "code": "public class User { /* new */ }",
+                "lines": 1,
+            }
+        ]
         data = build_code_diff_data(files, project_root=str(tmp_path))
         assert len(data["files"]) == 1
         f = data["files"][0]
@@ -106,3 +108,13 @@ class TestTryReadExisting:
         f.write_bytes(b"\xff\xfe\xfd\xfc")
         # 非 utf-8 时返回 None
         assert _try_read_existing(tmp_path, "binary.bin") is None
+
+    def test_returns_none_for_parent_path_escape(self, tmp_path):
+        outside = tmp_path.parent / "outside.txt"
+        outside.write_text("must not read", encoding="utf-8")
+        assert _try_read_existing(tmp_path, "../outside.txt") is None
+
+    def test_returns_none_for_absolute_path_escape(self, tmp_path):
+        outside = tmp_path.parent / "outside-absolute.txt"
+        outside.write_text("must not read", encoding="utf-8")
+        assert _try_read_existing(tmp_path, str(outside)) is None

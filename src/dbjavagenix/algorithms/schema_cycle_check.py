@@ -22,6 +22,8 @@ Complexity: O(V + E).
 
 from dataclasses import dataclass, field
 
+from .graph_input import normalize_graph_input
+
 
 _WHITE, _GRAY, _BLACK = 0, 1, 2
 
@@ -44,9 +46,7 @@ class CycleResult:
         return len(self.cycles) == 0
 
 
-def find_cycles(
-    tables: list[str], fks: list[tuple[str, str]]
-) -> CycleResult:
+def find_cycles(tables: list[str], fks: list[tuple[str, str]]) -> CycleResult:
     """Find FK cycles using iterative DFS.
 
     Args:
@@ -64,6 +64,7 @@ def find_cycles(
         - Duplicate cycle representations are deduplicated by canonical form
           (lexicographically smallest rotation).
     """
+    tables, fks = normalize_graph_input(tables, fks)
     table_set = set(tables)
     adj: dict[str, list[str]] = {t: [] for t in tables}
     for child, parent in fks:

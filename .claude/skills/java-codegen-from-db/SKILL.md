@@ -216,6 +216,11 @@ LLM **必须**把 schema 概述、命名推断和模板推荐呈现给用户，�
 
 如果目标文件已存在,生成 `*.codegen.bak` 备份,告诉用户怎么回滚(`mv x.bak x`)。
 
+### 5.4 释放连接
+
+工作流结束或用户决定中止时,调用 **`db_disconnect`** with
+`{"connection_id": "<connection_id>"}`。释放后的 ID 不应继续用于查询或生成。
+
 ---
 
 ## 错误处理与重试规则
@@ -252,6 +257,7 @@ LLM **必须**把 schema 概述、命名推断和模板推荐呈现给用户，�
          codegen_render_dto         (×1 per 表, 仅 sb35-java21)
 
 [写盘]   (内置于上述工具,Phase 3 后拆出 file_write_to_project)
+[收尾]   db_disconnect                 (会话结束时释放连接)
 ```
 
 ## 设计原则

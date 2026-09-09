@@ -22,6 +22,8 @@ Cluster naming heuristic (in order of preference):
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from .graph_input import normalize_graph_input
+
 
 @dataclass
 class ClusterResult:
@@ -67,10 +69,9 @@ class _UnionFind:
             self._rank[px] += 1
 
 
-def cluster_tables(
-    tables: list[str], fks: list[tuple[str, str]]
-) -> ClusterResult:
+def cluster_tables(tables: list[str], fks: list[tuple[str, str]]) -> ClusterResult:
     """Cluster tables by FK connectivity (FK graph treated as undirected)."""
+    tables, fks = normalize_graph_input(tables, fks)
     uf = _UnionFind(tables)
     table_set = set(tables)
     for child, parent in fks:
