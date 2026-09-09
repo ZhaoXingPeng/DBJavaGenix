@@ -12,7 +12,8 @@ import re
 from functools import lru_cache
 from pathlib import Path, PureWindowsPath
 from typing import Dict, Any, List, Optional
-from uuid import UUID
+from ..utils.json_serialization import default as _query_result_json_default
+from ..utils.json_serialization import dumps as _json_dumps
 
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
 
@@ -57,29 +58,6 @@ _LOCKING_READ_CLAUSES = (
     ("LOCK", "IN", "SHARE", "MODE"),
 )
 _DOLLAR_QUOTE_PATTERN = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
-
-
-def _query_result_json_default(value: object) -> object:
-    """Encode driver result values without losing precision or binary identity."""
-    if isinstance(value, Decimal):
-        return str(value)
-    if isinstance(value, (datetime, date, time)):
-        return value.isoformat()
-    if isinstance(value, UUID):
-        return str(value)
-    if isinstance(value, (bytes, bytearray, memoryview)):
-        return {
-            "encoding": "base64",
-            "data": b64encode(bytes(value)).decode("ascii"),
-        }
-    if isinstance(value, timedelta):
-        return str(value)
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
-
-
-def _json_dumps(value: object) -> str:
-    """Serialize MCP payloads with the same driver-value rules as query results."""
-    return json.dumps(value, ensure_ascii=False, default=_query_result_json_default)
 
 
 def _resolve_codegen_output_path(base_dir: Path, relative_path: object) -> Path:
@@ -750,7 +728,7 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
                  f"- Host: {config.host}:{config.port}\n"
                  f"- Type: {config.type.value}\n\n"
                  f"Use this connection_id for subsequent database operations.\n\n"
-                 f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
+                 f"Raw Response: {_json_dumps(response, ensure_ascii=False)}"
         )]
         
     except DatabaseConnectionError as e:
@@ -762,7 +740,7 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Database connection failed: {safe_error}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Database connection failed: {safe_error}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -775,7 +753,7 @@ async def handle_db_connect_test(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {safe_error}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {safe_error}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -817,7 +795,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
             }
             return [TextContent(
                 type="text",
-                text=f"SQLite databases: [{config.database}]\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
+                text=f"SQLite databases: [{config.database}]\n\nRaw Response: {_json_dumps(response, ensure_ascii=False)}"
             )]
         else:
             raise MCPServiceError(f"Listing databases not implemented for {config.type}")
@@ -842,7 +820,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
             type="text",
             text=f"Found {len(databases)} databases:\n" +
                  "\n".join(f"- {db}" for db in databases) +
-                 f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
+                 f"\n\nRaw Response: {_json_dumps(response, ensure_ascii=False)}"
         )]
         
     except (DatabaseConnectionError, DatabaseQueryError) as e:
@@ -853,7 +831,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Failed to list databases: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to list databases: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -865,7 +843,7 @@ async def handle_db_query_databases(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -946,7 +924,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
             text=f"Found {len(tables)} tables in database '{database}'" +
                  (f" schema '{schema}'" if schema else "") + ":\n" +
                  "\n".join(f"- {table}" for table in tables) +
-                 f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
+                 f"\n\nRaw Response: {_json_dumps(response, ensure_ascii=False)}"
         )]
         
     except (DatabaseConnectionError, DatabaseQueryError) as e:
@@ -957,7 +935,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Failed to list tables: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to list tables: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -969,7 +947,7 @@ async def handle_db_query_tables(arguments: Dict[str, Any]) -> List[TextContent]
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1044,7 +1022,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
             type="text",
             text=(
                 f"Table '{table}' {status} in database '{database}'\n\n"
-                f"Raw Response: {json.dumps(response, ensure_ascii=False)}"
+                f"Raw Response: {_json_dumps(response, ensure_ascii=False)}"
             )
         )]
         
@@ -1056,7 +1034,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Failed to check table existence: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to check table existence: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1068,7 +1046,7 @@ async def handle_db_query_table_exists(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1134,7 +1112,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Failed to execute query: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to execute query: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1146,7 +1124,7 @@ async def handle_db_query_execute(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text", 
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1323,7 +1301,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
         }
         return [TextContent(
             type="text",
-            text=f"Failed to describe table: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to describe table: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1335,7 +1313,7 @@ async def handle_db_table_describe(arguments: Dict[str, Any]) -> List[TextConten
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1467,7 +1445,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get column information: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to get column information: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1479,7 +1457,7 @@ async def handle_db_table_columns(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1577,7 +1555,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get primary keys: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to get primary keys: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1589,7 +1567,7 @@ async def handle_db_table_primary_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1727,7 +1705,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get foreign keys: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to get foreign keys: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1739,7 +1717,7 @@ async def handle_db_table_foreign_keys(arguments: Dict[str, Any]) -> List[TextCo
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -1891,7 +1869,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Failed to get table indexes: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to get table indexes: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -1903,7 +1881,7 @@ async def handle_db_table_indexes(arguments: Dict[str, Any]) -> List[TextContent
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -2160,7 +2138,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Failed to analyze table for code generation: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to analyze table for code generation: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -2172,7 +2150,7 @@ async def handle_db_codegen_analyze(arguments: Dict[str, Any]) -> List[TextConte
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -2593,7 +2571,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         }
         return [TextContent(
             type="text",
-            text=f"Failed to generate code: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Failed to generate code: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
         
     except Exception as e:
@@ -2605,7 +2583,7 @@ async def handle_db_codegen_generate(arguments: Dict[str, Any]) -> List[TextCont
         }
         return [TextContent(
             type="text",
-            text=f"Unexpected error: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Unexpected error: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -2989,7 +2967,7 @@ async def handle_springboot_validate_project(arguments: Dict[str, Any]) -> List[
         }
         return [TextContent(
             type="text",
-            text=f"Project validation failed: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Project validation failed: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -3129,7 +3107,7 @@ async def handle_springboot_analyze_dependencies(arguments: Dict[str, Any]) -> L
         }
         return [TextContent(
             type="text",
-            text=f"Dependency analysis failed: {str(e)}\n\nRaw Response: {json.dumps(error_response, ensure_ascii=False)}"
+            text=f"Dependency analysis failed: {str(e)}\n\nRaw Response: {_json_dumps(error_response, ensure_ascii=False)}"
         )]
 
 
@@ -3404,7 +3382,7 @@ async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextC
         return [TextContent(
             type="text",
             text='\n'.join(text_lines)
-            + f"\n\nRaw Response: {json.dumps(response, ensure_ascii=False)}"
+            + f"\n\nRaw Response: {_json_dumps(response, ensure_ascii=False)}"
         )]
 
     except Exception as e:
@@ -3415,6 +3393,6 @@ async def handle_springboot_read_config(arguments: Dict[str, Any]) -> List[TextC
         }
         return [TextContent(
             type="text",
-            text=f"Failed to read Spring Boot config: {e}\n\nRaw Response: {json.dumps(err, ensure_ascii=False)}"
+            text=f"Failed to read Spring Boot config: {e}\n\nRaw Response: {_json_dumps(err, ensure_ascii=False)}"
         )]
 
