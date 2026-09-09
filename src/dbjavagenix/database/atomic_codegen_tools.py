@@ -23,6 +23,7 @@ P2.2: 原子化代码生成工具 - 把 db_codegen_generate 拆为 7 个职责�
 """
 
 import json
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -35,6 +36,20 @@ from ..generator.template_context import apply_generation_options
 from ..utils.json_serialization import dumps as _json_dumps
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_db_call(callable_obj, *args, **kwargs):
+    """Run blocking database work outside the MCP event loop."""
+    return await asyncio.to_thread(callable_obj, *args, **kwargs)
+
+
+async def _run_async_db_call(callable_obj, *args, **kwargs):
+    """Run an async analyzer in a worker when it performs blocking I/O."""
+
+    def run():
+        return asyncio.run(callable_obj(*args, **kwargs))
+
+    return await _run_db_call(run)
 
 
 # ============================================================
@@ -221,10 +236,11 @@ async def handle_codegen_build_context(arguments: Dict[str, Any]) -> List[TextCo
             database = config.database or "information_schema"
 
         # 收集所有表名用于前缀分析(沿用旧逻辑)
-        all_table_names = _collect_all_table_names(connection_id, config)
+        all_table_names = await _run_db_call(_collect_all_table_names, connection_id, config)
 
         analyzer = CodegenAnalyzer(connection_manager)
-        analysis = await analyzer.analyze_table_for_codegen(
+        analysis = await _run_async_db_call(
+            analyzer.analyze_table_for_codegen,
             connection_id,
             table_name,
             all_table_names=all_table_names,

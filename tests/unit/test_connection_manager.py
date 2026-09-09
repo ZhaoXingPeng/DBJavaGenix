@@ -128,6 +128,19 @@ class TestExecuteQuery:
         with pytest.raises(DatabaseQueryError):
             mgr.execute_query(cid, "INVALID SQL STATEMENT")
 
+    def test_failed_sql_rolls_back_pending_sqlite_transaction(self, manager_with_conn):
+        mgr, cid = manager_with_conn
+        mgr.execute_query(cid, "CREATE TABLE pending (id INTEGER PRIMARY KEY, value TEXT)")
+
+        # Simulate a caller-owned transaction started on the same connection.
+        connection = mgr.get_connection(cid)
+        connection.execute("INSERT INTO pending (id, value) VALUES (1, 'uncommitted')")
+
+        with pytest.raises(DatabaseQueryError):
+            mgr.execute_query(cid, "INVALID SQL STATEMENT")
+
+        assert mgr.execute_query(cid, "SELECT * FROM pending") == []
+
     def test_empty_result_table(self, manager_with_conn):
         mgr, cid = manager_with_conn
         mgr.execute_query(cid, "CREATE TABLE e (x INT)")
