@@ -86,6 +86,7 @@ En el cliente LLM, di "**Genera código Spring Boot a partir de las tres tablas 
 5. Llamará a `ai_recommend_template` para recomendar → detectará RBAC y recomendará `MybatisPlus-Mixed`
 6. Usará `codegen_build_context` + 5 `codegen_render_*` para generar por capas, devolviendo code-diff en cada capa
 7. Tras la confirmación del usuario, escribirá en disco
+8. Al finalizar la sesión, llamará a `db_disconnect(connection_id)` para liberar la conexión
 
 ## Capacidades principales (Fase 1 → 5)
 
@@ -126,11 +127,11 @@ En el cliente LLM, di "**Genera código Spring Boot a partir de las tres tablas 
 - Logs estructurados: `DBJAVAGENIX_LOG_FORMAT=json` permite salida de JSON en una sola línea, ideal para Loki/ELK
 - [Manual de despliegue](docs/deployment.md): 3 modos de despliegue + 6 escenarios de troubleshooting
 
-## Resumen de herramientas (33 en total)
+## Resumen de herramientas (34 en total)
 
 | Categoría | Herramienta |
 |------|------|
-| Conexión / Consulta | db_connect_test / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
+| Conexión / Consulta | db_connect_test / db_disconnect / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
 | Estructura de tabla | db_table_describe / db_table_columns / db_table_primary_keys / db_table_foreign_keys / db_table_indexes |
 | Algoritmos de grafo de schema | schema_topo_order / schema_cluster_tables / schema_check_cycles |
 | Generación de código (atómica) | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_dto / codegen_render_mapper |
@@ -162,7 +163,7 @@ Consulta [`iteration-plan/01-target-architecture.md`](iteration-plan/01-target-a
 ```
 [ Capa Skills ]  Define "cómo hacerlo" — .claude/skills/*.md  Flujo de 5 fases explícito
        ↓
-[ Capa MCP ]     Proporciona "qué se puede hacer" — 33 herramientas  Contexto transferido explícitamente
+[ Capa MCP ]     Proporciona "qué se puede hacer" — 34 herramientas  Contexto transferido explícitamente
        ↓
 [ Capa Apps ]    Hace los resultados "visibles" — 4 componentes de UI (mermaid/dashboard/code-diff/tree)
 ```

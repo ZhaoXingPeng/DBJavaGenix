@@ -185,6 +185,31 @@ class TestTemplateContextEntity:
         ctx = TemplateContext.build_entity_context(t, sample_config)
         assert "entity" in ctx["comment"].lower()
 
+    @pytest.mark.parametrize(
+        "primary_key, auto_increment, expected",
+        [(True, False, False), (False, True, True), (False, False, False)],
+    )
+    def test_has_auto_increment_uses_column_flag(
+        self, sample_config, primary_key, auto_increment, expected
+    ):
+        table = TableInfo(
+            name="account",
+            schema="public",
+            columns=[
+                ColumnInfo(
+                    name="id",
+                    data_type="BIGINT",
+                    java_type="Long",
+                    primary_key=primary_key,
+                    auto_increment=auto_increment,
+                )
+            ],
+        )
+
+        context = TemplateContext.build_entity_context(table, sample_config)
+
+        assert context["hasAutoIncrement"] is expected
+
 
 class TestTemplateContextDto:
     def test_excludes_primary_key(self, sample_table, sample_config):
