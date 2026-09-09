@@ -140,6 +140,155 @@ async def test_query_execute_serializes_real_driver_value_types(monkeypatch):
     }
 
 
+@pytest.mark.asyncio
+async def test_metadata_handlers_serialize_driver_value_types(monkeypatch):
+    config = SimpleNamespace(type=DatabaseType.POSTGRESQL, database="app")
+
+    class Introspector:
+        def __init__(self, _manager):
+            pass
+
+        def get_config(self, _connection_id):
+            return config
+
+        def describe_table(self, _connection_id, _table, _schema):
+            return {
+                "name": "events",
+                "schema": "public",
+                "comment": datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc),
+                "columns": [
+                    {
+                        "name": "amount",
+                        "type": "numeric",
+                        "column_type": "numeric(10,2)",
+                        "nullable": False,
+                        "default_value": Decimal("12.30"),
+                        "comment": UUID("12345678-1234-5678-1234-567812345678"),
+                        "primary_key": False,
+                        "precision": 10,
+                        "scale": 2,
+                        "max_length": None,
+                    }
+                ],
+            }
+
+        def get_columns(self, _connection_id, _table, _schema):
+            return [
+                {
+                    "name": "amount",
+                    "type": "numeric",
+                    "column_type": "numeric(10,2)",
+                    "nullable": False,
+                    "default_value": memoryview(b"view"),
+                    "comment": "created",
+                    "precision": 10,
+                    "scale": 2,
+                    "max_length": None,
+                }
+            ]
+
+        def get_primary_keys(self, _connection_id, _table, _schema):
+            return ["id"]
+
+        def get_foreign_keys(self, _connection_id, _table, _schema):
+            return [
+                {
+                    "column_name": "owner_id",
+                    "referenced_table": "users",
+                    "referenced_column": "id",
+                    "constraint_name": "events_owner_fk",
+                }
+            ]
+
+        def get_indexes(self, _connection_id, _table, _schema):
+            return [
+                {
+                    "key_name": "events_amount_idx",
+                    "column_name": "amount",
+                    "seq_in_index": 1,
+                    "unique": False,
+                    "index_type": "btree",
+                }
+            ]
+
+    monkeypatch.setattr(mcp_tools, "DatabaseIntrospector", Introspector)
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "get_connection_info",
+        lambda _id: config,
+    )
+    common = {
+        "connection_id": "pg-1",
+        "database": "app",
+        "table": "events",
+        "schema": "public",
+    }
+
+    describe = await mcp_tools.handle_db_table_describe(common)
+    columns = await mcp_tools.handle_db_table_columns(common)
+    primary_keys = await mcp_tools.handle_db_table_primary_keys(common)
+    foreign_keys = await mcp_tools.handle_db_table_foreign_keys(common)
+    indexes = await mcp_tools.handle_db_table_indexes(common)
+
+    assert _raw_payload(describe)["columns"][0]["default_value"] == "12.30"
+    assert _raw_payload(describe)["comment"] == "2026-09-08T10:00:00+00:00"
+    assert _raw_payload(columns)["columns"][0]["COLUMN_DEFAULT"] == {
+        "encoding": "base64",
+        "data": "dmlldw==",
+    }
+    assert _raw_payload(columns)["columns"][0]["COLUMN_COMMENT"] == "created"
+    assert _raw_payload(primary_keys)["primary_keys"] == ["id"]
+    assert _raw_payload(foreign_keys)["foreign_keys"][0]["references_table"] == "users"
+    assert _raw_payload(indexes)["indexes"][0]["name"] == "events_amount_idx"
+
+
+@pytest.mark.asyncio
+async def test_codegen_analysis_raw_response_serializes_driver_values(monkeypatch):
+    class Analyzer:
+        def __init__(self, _manager):
+            pass
+
+        async def analyze_table_for_codegen(self, *_args, **_kwargs):
+            return {
+                "table_name": "events",
+                "table_info": {
+                    "name": "events",
+                    "comment": "event table",
+                    "columns": [
+                        {
+                            "name": "amount",
+                            "type": "numeric",
+                            "default_value": Decimal("12.30"),
+                        }
+                    ],
+                },
+                "template_context": {
+                    "columns": [{"javaType": "BigDecimal"}],
+                    "className": "Event",
+                    "lowerCaseName": "event",
+                    "hasDateField": False,
+                    "hasBigDecimalField": True,
+                    "primaryKey": "id",
+                },
+                "java_types": ["BigDecimal"],
+                "imports_needed": [],
+                "relationships": {"primary_keys": ["id"], "foreign_keys": [], "indexes": []},
+            }
+
+    monkeypatch.setattr("dbjavagenix.database.codegen_tools.CodegenAnalyzer", Analyzer)
+    monkeypatch.setattr(
+        mcp_tools.connection_manager,
+        "get_connection_info",
+        lambda _id: SimpleNamespace(type=DatabaseType.POSTGRESQL, database="app"),
+    )
+
+    response = await mcp_tools.handle_db_codegen_analyze(
+        {"connection_id": "pg-1", "table_name": "events"}
+    )
+
+    assert _raw_payload(response)["table_info"]["columns"][0]["default_value"] == "12.30"
+
+
 def test_query_result_json_default_rejects_unknown_object():
     class UnknownDriverValue:
         pass
