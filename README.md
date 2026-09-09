@@ -7,6 +7,8 @@
 
 [![CI](https://github.com/ZhaoXingPeng/DBJavaGenix/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhaoXingPeng/DBJavaGenix/actions/workflows/ci.yml)
 
+![DBJavaGenix 数据库反向工程与 Java 代码生成视觉封面](docs/design/dbjavagenix-cover.png)
+
 ```mermaid
 graph LR
     Client[Claude Desktop / Cursor / Cherry] -->|Skill 加载| Skills
@@ -161,6 +163,8 @@ SQL Server 的类型映射保留为后续扩展准备，但尚未实现运行时
 | 客户端兼容 | Claude Desktop / Cursor / Cherry / ... | 仅 IDEA | CLI | 浏览器 |
 
 ## 技术架构
+
+![DBJavaGenix Skills、MCP、MCP Apps 与数据库代码生成架构](docs/design/dbjavagenix-architecture.png)
 
 详见 [`iteration-plan/01-target-architecture.md`](iteration-plan/01-target-architecture.md)。三层职责:
 
