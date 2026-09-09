@@ -85,6 +85,7 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 5. `ai_recommend_template` でテンプレートを推薦し、RBAC を検出して `MybatisPlus-Mixed` を提案する
 6. `codegen_build_context` + 5 つの `codegen_render_*` でレイヤーごとに生成し、各レイヤーの code-diff を返す
 7. ユーザーの確認後にファイルへ書き込む
+8. セッション終了時に `db_disconnect(connection_id)` を呼び出して接続を解放する
 
 ## 主な機能（Phase 1 → 5）
 
@@ -130,11 +131,11 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 - 構造化ログ: `DBJAVAGENIX_LOG_FORMAT=json` で Loki / ELK に適した 1 行 JSON を出力
 - [デプロイガイド](docs/deployment.md): 3 つのデプロイ方式 + 6 つのトラブルシューティング事例
 
-## ツール一覧（33 個）
+## ツール一覧（34 個）
 
 | カテゴリ | ツール |
 |------|------|
-| 接続 / クエリ | db_connect_test / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
+| 接続 / クエリ | db_connect_test / db_disconnect / db_query_databases / db_query_tables / db_query_table_exists / db_query_execute |
 | テーブル構造 | db_table_describe / db_table_columns / db_table_primary_keys / db_table_foreign_keys / db_table_indexes |
 | スキーマグラフアルゴリズム | schema_topo_order / schema_cluster_tables / schema_check_cycles |
 | コード生成（アトミック） | codegen_build_context / codegen_render_entity / codegen_render_dao / codegen_render_service / codegen_render_controller / codegen_render_dto / codegen_render_mapper |
@@ -166,7 +167,7 @@ LLM クライアントで、例えば **「myapp データベースの sys_user 
 ```
 [ Skills 層 ]  「方法」を定義 — .claude/skills/*.md  明示的な 5 段階ワークフロー
        ↓
-[ MCP 層 ]     「できること」を提供 — 33 ツール  context を明示的に受け渡し
+[ MCP 層 ]     「できること」を提供 — 34 ツール  context を明示的に受け渡し
        ↓
 [ Apps 層 ]    結果を「見える化」 — 4 つの UI コンポーネント（mermaid/dashboard/code-diff/tree）
 ```

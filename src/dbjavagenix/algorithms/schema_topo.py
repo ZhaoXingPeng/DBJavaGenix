@@ -16,6 +16,8 @@ Complexity: O(V + E) where V = |tables|, E = |fks|.
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 
+from .graph_input import normalize_graph_input
+
 
 @dataclass
 class TopoResult:
@@ -36,9 +38,7 @@ class TopoResult:
         return bool(self.unresolved)
 
 
-def topological_sort(
-    tables: list[str], fks: list[tuple[str, str]]
-) -> TopoResult:
+def topological_sort(tables: list[str], fks: list[tuple[str, str]]) -> TopoResult:
     """Topologically sort tables by FK dependencies using Kahn's algorithm.
 
     Args:
@@ -55,6 +55,7 @@ def topological_sort(
         - FKs pointing to tables outside the `tables` list are ignored (the
           dependency is treated as already satisfied / external).
     """
+    tables, fks = normalize_graph_input(tables, fks)
     table_set = set(tables)
     in_degree = {t: 0 for t in tables}
     children: dict[str, list[str]] = defaultdict(list)

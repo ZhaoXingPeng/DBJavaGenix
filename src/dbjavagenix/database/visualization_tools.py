@@ -5,6 +5,7 @@ P3.1: 可视化工具 - 跨表 ER 图生成。
   - db_render_er_diagram: 给定多个表名,生成 Mermaid erDiagram (附加 mcp-apps/mermaid meta)
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -81,8 +82,13 @@ async def handle_db_render_er_diagram(arguments: Dict[str, Any]) -> List[TextCon
         all_fks: List[ERForeignKey] = []
 
         for table_name in tables:
-            columns, fks = _collect_table_for_er(
-                connection_id, database, table_name, config.type, include_non_pk
+            columns, fks = await asyncio.to_thread(
+                _collect_table_for_er,
+                connection_id,
+                database,
+                table_name,
+                config.type,
+                include_non_pk,
             )
             er_tables.append(ERTable(name=table_name, columns=columns))
             all_fks.extend(fks)

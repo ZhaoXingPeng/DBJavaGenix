@@ -1,4 +1,5 @@
 """Unit tests for schema_topo (Kahn's topological sort)."""
+
 import pytest
 
 from dbjavagenix.algorithms.schema_topo import TopoResult, topological_sort
@@ -35,9 +36,7 @@ class TestTopologicalSort:
 
     def test_cycle_detection(self):
         # a -> b -> c -> a  (cycle)
-        r = topological_sort(
-            ["a", "b", "c"], [("b", "a"), ("c", "b"), ("a", "c")]
-        )
+        r = topological_sort(["a", "b", "c"], [("b", "a"), ("c", "b"), ("a", "c")])
         assert r.has_cycle
         assert set(r.unresolved) == {"a", "b", "c"}
         assert r.order == []
@@ -64,6 +63,22 @@ class TestTopologicalSort:
         # Multiple level-0 tables -> alphabetical
         r = topological_sort(["z", "y", "x"], [])
         assert r.order == ["x", "y", "z"]
+
+    def test_duplicate_tables_and_edges_are_normalized(self):
+        r = topological_sort(
+            ["users", "users", "orders"],
+            [("orders", "users"), ("orders", "users")],
+        )
+        assert r.order == ["users", "orders"]
+        assert r.unresolved == []
+        assert r.levels == {"users": 0, "orders": 1}
+
+    def test_malformed_graph_values_are_ignored(self):
+        r = topological_sort(
+            ["users", "", None, "orders"],
+            [("orders", "users"), ("orders", None), ["orders"], "invalid"],
+        )
+        assert r.order == ["users", "orders"]
 
     def test_levels_computed(self):
         # diamond: a -> b, a -> c, b -> d, c -> d
