@@ -54,7 +54,9 @@ def build_package_tree_data(
     root = Path(project_root) if project_root else None
     for parts, original in zip(split_paths, file_paths):
         # 移除 root 前缀
-        relative = parts[len(root_segments):] if parts[:len(root_segments)] == root_segments else parts
+        relative = (
+            parts[len(root_segments) :] if parts[: len(root_segments)] == root_segments else parts
+        )
         _insert_into_tree(
             tree,
             relative,
@@ -90,9 +92,7 @@ def _common_prefix(paths: List[List[str]]) -> List[str]:
     return prefix
 
 
-def _insert_into_tree(
-    node: Dict[str, Any], parts: List[str], file_status: str
-) -> None:
+def _insert_into_tree(node: Dict[str, Any], parts: List[str], file_status: str) -> None:
     """把 parts 路径插入树节点"""
     if not parts:
         return
@@ -114,17 +114,21 @@ def _serialize_tree(node: Dict[str, Any]) -> List[Dict[str, Any]]:
     for name in sorted(children.keys()):
         child = children[name]
         if child.get("_file"):
-            out.append({
-                "name": name,
-                "type": "file",
-                "status": child.get("_status", "new"),
-            })
+            out.append(
+                {
+                    "name": name,
+                    "type": "file",
+                    "status": child.get("_status", "new"),
+                }
+            )
         else:
-            out.append({
-                "name": name,
-                "type": "package",
-                "children": _serialize_tree(child),
-            })
+            out.append(
+                {
+                    "name": name,
+                    "type": "package",
+                    "children": _serialize_tree(child),
+                }
+            )
     return out
 
 
@@ -132,7 +136,12 @@ def _determine_status(project_root: Optional[Path], relative_path: str) -> str:
     """判断目标位置文件状态"""
     if not project_root:
         return "new"
-    target = project_root / relative_path
-    if target.exists() and target.is_file():
-        return "modified"
+    try:
+        resolved_root = project_root.resolve()
+        target = (resolved_root / relative_path).resolve()
+        target.relative_to(resolved_root)
+        if target.exists() and target.is_file():
+            return "modified"
+    except (OSError, RuntimeError, ValueError):
+        pass
     return "new"

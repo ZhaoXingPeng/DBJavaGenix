@@ -10,6 +10,48 @@ from ..core.java_identifiers import to_camel_case, to_pascal_case
 from ..database.dialect import DialectAdapter, get_dialect
 
 
+def apply_generation_options(
+    context: Dict[str, Any],
+    *,
+    generate_dto: Optional[bool] = None,
+    generate_vo: Optional[bool] = None,
+    include_dto_vo: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Normalize DTO/VO switches shared by legacy and atomic generation paths.
+
+    ``includeDtoVo`` and ``include_dto_vo`` are retained as compatibility
+    aliases for callers that historically enabled both artifacts together.
+    Explicit per-artifact switches take precedence over those aliases.
+    """
+    if include_dto_vo is None:
+        include_dto_vo = context.get("includeDtoVo", context.get("include_dto_vo"))
+
+    if include_dto_vo is not None:
+        if generate_dto is None:
+            generate_dto = include_dto_vo
+        if generate_vo is None:
+            generate_vo = include_dto_vo
+
+    if generate_dto is None:
+        generate_dto = context.get("generateDto", False)
+    if generate_vo is None:
+        generate_vo = context.get("generateVo", False)
+
+    dto_enabled = bool(generate_dto)
+    vo_enabled = bool(generate_vo)
+    context.update(
+        {
+            "generateDto": dto_enabled,
+            "generateVo": vo_enabled,
+            "hasDto": dto_enabled,
+            "hasVo": vo_enabled,
+            "includeDtoVo": dto_enabled or vo_enabled,
+            "include_dto_vo": dto_enabled or vo_enabled,
+        }
+    )
+    return context
+
+
 class TemplateContextBuilder:
     """模板上下文构建器"""
 
@@ -366,25 +408,11 @@ class TemplateContextBuilder:
 
     def _build_imports(self, columns: List[ColumnInfo], template_category: str) -> List[str]:
         """构建导入列表"""
-        imports = []
-        java_types = {self._map_java_type(col.data_type) for col in columns}
-
-        # 时间类型导入
-        import_by_type = {
-            "LocalDateTime": "java.time.LocalDateTime",
-            "LocalDate": "java.time.LocalDate",
-            "LocalTime": "java.time.LocalTime",
-            "OffsetDateTime": "java.time.OffsetDateTime",
-            "OffsetTime": "java.time.OffsetTime",
-            "Instant": "java.time.Instant",
-            "BigDecimal": "java.math.BigDecimal",
-            "BigInteger": "java.math.BigInteger",
-            "UUID": "java.util.UUID",
+        imports = {
+            import_path
+            for column in columns
+            for import_path in self.dialect.java_imports_for(column.data_type)
         }
-        imports.extend(
-            import_by_type[java_type] for java_type in java_types if java_type in import_by_type
-        )
-
         return sorted(imports)
 
     def _has_date_field(self, columns: List[ColumnInfo]) -> bool:

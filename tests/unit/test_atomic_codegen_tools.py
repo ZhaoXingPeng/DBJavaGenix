@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from dbjavagenix.database import atomic_codegen_tools
 from dbjavagenix.database.atomic_codegen_tools import (
     _compute_file_path,
     _collect_all_table_names,
@@ -163,19 +164,38 @@ class TestToolDefinitions:
 
 
 def test_collect_all_table_names_supports_postgresql(monkeypatch):
-    connection = _TableNameConnection()
-    monkeypatch.setattr(
-        "dbjavagenix.database.atomic_codegen_tools.connection_manager",
-        _TableNameManager(connection),
-    )
+    class Introspector:
+        def __init__(self, manager):
+            assert manager is atomic_codegen_tools.connection_manager
+
+        def list_tables(self, connection_id):
+            assert connection_id == "pg-1"
+            return ["users", "user_roles"]
+
+    monkeypatch.setattr(atomic_codegen_tools, "DatabaseIntrospector", Introspector)
 
     names = _collect_all_table_names(
         "pg-1", type("Config", (), {"type": DatabaseType.POSTGRESQL})()
     )
 
     assert names == ["users", "user_roles"]
-    assert "information_schema.tables" in connection.cursor_instance.query
-    assert "pg_catalog" in connection.cursor_instance.query
+
+
+def test_collect_all_table_names_keeps_empty_fallback_on_introspection_error(monkeypatch):
+    class Introspector:
+        def __init__(self, manager):
+            pass
+
+        def list_tables(self, connection_id):
+            if connection_id == "empty":
+                return []
+            raise RuntimeError("metadata unavailable")
+
+    monkeypatch.setattr(atomic_codegen_tools, "DatabaseIntrospector", Introspector)
+    config = type("Config", (), {"type": DatabaseType.POSTGRESQL})()
+
+    assert _collect_all_table_names("empty", config) == []
+    assert _collect_all_table_names("broken", config) == []
 
 
 # ============================================================
