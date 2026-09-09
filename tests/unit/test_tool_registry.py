@@ -17,6 +17,7 @@ from dbjavagenix.database.discovery_tools import (
     get_discovery_tools,
     handle_search_tools,
 )
+from dbjavagenix.database.capabilities import supported_database_display_names
 from dbjavagenix.database.atomic_codegen_tools import get_atomic_codegen_tools
 from dbjavagenix.server.mcp_server import _all_tools
 from dbjavagenix.utils.tool_registry import (
@@ -49,6 +50,14 @@ class TestRegistryStructure:
         assert meta is not None
         assert meta.always_visible is True
         assert "search" in meta.tags
+
+    def test_connection_description_matches_runtime_capabilities(self):
+        meta = get_metadata("db_connect_test")
+        assert meta is not None
+        expected = "建立数据库连接 (" + "/".join(supported_database_display_names()) + ")"
+        assert meta.description_brief == expected
+        assert "Oracle" not in meta.description_brief
+        assert "SQL Server" not in meta.description_brief
 
     def test_always_visible_names(self):
         names = get_always_visible_names()

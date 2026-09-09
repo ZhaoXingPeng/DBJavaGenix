@@ -21,9 +21,11 @@ class TestBuildPackageTreeData:
         assert data == {"root": "", "children": []}
 
     def test_single_file(self):
-        data = build_package_tree_data([
-            "com/example/entity/User.java",
-        ])
+        data = build_package_tree_data(
+            [
+                "com/example/entity/User.java",
+            ]
+        )
         assert data["root"] == "com.example.entity"
         # 仅有一层 children: 文件本身
         assert len(data["children"]) == 1
@@ -34,11 +36,13 @@ class TestBuildPackageTreeData:
         }
 
     def test_common_prefix_detected(self):
-        data = build_package_tree_data([
-            "com/example/entity/User.java",
-            "com/example/dao/UserDao.java",
-            "com/example/service/UserService.java",
-        ])
+        data = build_package_tree_data(
+            [
+                "com/example/entity/User.java",
+                "com/example/dao/UserDao.java",
+                "com/example/service/UserService.java",
+            ]
+        )
         assert data["root"] == "com.example"
         # 三个一级 children: entity / dao / service (packages)
         names = [c["name"] for c in data["children"]]
@@ -48,10 +52,12 @@ class TestBuildPackageTreeData:
         assert "service" in names
 
     def test_nested_packages(self):
-        data = build_package_tree_data([
-            "com/example/entity/sub/Inner.java",
-            "com/example/entity/Outer.java",
-        ])
+        data = build_package_tree_data(
+            [
+                "com/example/entity/sub/Inner.java",
+                "com/example/entity/Outer.java",
+            ]
+        )
         assert data["root"] == "com.example.entity"
         # children: Outer.java (file) + sub (package)
         children = data["children"]
@@ -60,11 +66,13 @@ class TestBuildPackageTreeData:
         assert types["sub"] == "package"
 
     def test_alpha_sort(self):
-        data = build_package_tree_data([
-            "z.java",
-            "a.java",
-            "m.java",
-        ])
+        data = build_package_tree_data(
+            [
+                "z.java",
+                "a.java",
+                "m.java",
+            ]
+        )
         names = [c["name"] for c in data["children"]]
         assert names == ["a.java", "m.java", "z.java"]
 
@@ -98,10 +106,12 @@ class TestCommonPrefix:
         assert _common_prefix([["a", "X.java"], ["b", "Y.java"]]) == []
 
     def test_partial(self):
-        assert _common_prefix([
-            ["a", "b", "c", "X.java"],
-            ["a", "b", "d", "Y.java"],
-        ]) == ["a", "b"]
+        assert _common_prefix(
+            [
+                ["a", "b", "c", "X.java"],
+                ["a", "b", "d", "Y.java"],
+            ]
+        ) == ["a", "b"]
 
     def test_empty_list(self):
         assert _common_prefix([]) == []
@@ -118,3 +128,13 @@ class TestDetermineStatus:
 
     def test_file_missing_returns_new(self, tmp_path):
         assert _determine_status(tmp_path, "missing.txt") == "new"
+
+    def test_parent_path_escape_returns_new(self, tmp_path):
+        outside = tmp_path.parent / "outside.txt"
+        outside.write_text("must not inspect", encoding="utf-8")
+        assert _determine_status(tmp_path, "../outside.txt") == "new"
+
+    def test_absolute_path_escape_returns_new(self, tmp_path):
+        outside = tmp_path.parent / "outside-absolute.txt"
+        outside.write_text("must not inspect", encoding="utf-8")
+        assert _determine_status(tmp_path, str(outside)) == "new"

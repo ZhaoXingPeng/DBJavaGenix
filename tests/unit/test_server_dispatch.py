@@ -55,6 +55,22 @@ async def test_dispatch_resolves_handler_from_canonical_name(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_disconnect_is_dispatchable_from_canonical_name(monkeypatch):
+    calls = []
+
+    async def fake_disconnect(arguments):
+        calls.append(arguments)
+        return [TextContent(type="text", text="closed")]
+
+    monkeypatch.setattr(mcp_server, "handle_db_disconnect", fake_disconnect)
+
+    result = await mcp_server.handle_call_tool("db_disconnect", {"connection_id": "conn-1"})
+
+    assert result[0].text == "closed"
+    assert calls == [{"connection_id": "conn-1"}]
+
+
+@pytest.mark.asyncio
 async def test_unknown_tool_returns_structured_error(monkeypatch):
     monkeypatch.setattr(mcp_server, "_tool_handlers", lambda: {})
 

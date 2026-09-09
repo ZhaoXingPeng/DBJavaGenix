@@ -101,6 +101,12 @@ class CodegenAnalyzer:
         # batch analysis so equally named tables cannot become ambiguous or overwrite
         # one another in the returned mapping.
         all_table_references = self.introspector.list_table_references(connection_id)
+        # Prefix analysis operates on bare table names.  Deduplicate names so
+        # PostgreSQL tables with the same name in different schemas do not
+        # inflate a prefix group's table count.
+        all_table_names = sorted(
+            {str(reference["name"]) for reference in all_table_references if reference.get("name")}
+        )
 
         def table_key(reference: Dict[str, str | None]) -> str:
             return (
@@ -123,7 +129,10 @@ class CodegenAnalyzer:
             result_key = table_key(reference)
             try:
                 analysis_results[result_key] = await self.analyze_table_for_codegen(
-                    connection_id, name, schema=schema
+                    connection_id,
+                    name,
+                    all_table_names=all_table_names,
+                    schema=schema,
                 )
             except Exception as exc:
                 analysis_results[result_key] = {"error": str(exc)}
@@ -244,7 +253,10 @@ class CodegenGenerator:
     ) -> Dict[str, Any]:
         """根据分析结果生成代码"""
 
-        from ..generator.template_context import TemplateConfigManager
+        from ..generator.template_context import (
+            TemplateConfigManager,
+            apply_generation_options,
+        )
 
         supported_categories = TemplateConfigManager.get_supported_categories()
         if template_category not in supported_categories:
@@ -258,13 +270,30 @@ class CodegenGenerator:
         template_config = TemplateConfigManager()
         base_templates = template_config.get_template_files(template_category)
         template_files = list(base_templates)
-        # 动态附加DTO/VO/MapStruct模板 & MyBatis-Plus配置
-        tc = analysis_result.get("template_context", {})
-        use_mapstruct = bool(tc.get("useMapStruct"))
-        include_dto_vo = bool(tc.get("includeDtoVo") or tc.get("include_dto_vo"))
+        # 使用分析结果中的模板上下文，但更新配置相关字段
+        context = analysis_result["template_context"].copy()
+        generation_options = generation_config or {}
+
+        def option(*names: str) -> Any:
+            for name in names:
+                if name in generation_options:
+                    return generation_options[name]
+            return None
+
+        apply_generation_options(
+            context,
+            generate_dto=option("generate_dto", "generateDto"),
+            generate_vo=option("generate_vo", "generateVo"),
+            include_dto_vo=option("include_dto_vo", "includeDtoVo"),
+        )
+
+        # 动态附加 DTO/VO/MapStruct 模板 & MyBatis-Plus 配置
+        use_mapstruct = bool(context.get("useMapStruct"))
         extras: list[str] = []
-        if include_dto_vo:
-            extras.extend(["dto.mustache", "vo.mustache"])
+        if context.get("generateDto") and "dto.mustache" not in base_templates:
+            extras.append("dto.mustache")
+        if context.get("generateVo") and "vo.mustache" not in base_templates:
+            extras.append("vo.mustache")
         if use_mapstruct:
             extras.append("mapstruct_mapper.mustache")
         # 为 MyBatis-Plus 路线附加配置类（分页拦截器）
@@ -272,9 +301,6 @@ class CodegenGenerator:
             extras.append("mybatis_plus_config.mustache")
         if extras:
             template_files.extend(extras)
-
-        # 使用分析结果中的模板上下文，但更新配置相关字段
-        context = analysis_result["template_context"].copy()
 
         # 重新设置包名和作者信息
         if generation_config:
@@ -292,6 +318,8 @@ class CodegenGenerator:
                 service_package = f"{package_name}.service.{package_suffix}"
                 entity_package = f"{package_name}.entity.{package_suffix}"
                 dao_package = f"{package_name}.dao.{package_suffix}"
+                dto_package = f"{package_name}.dto.{package_suffix}"
+                vo_package = f"{package_name}.vo.{package_suffix}"
                 # 修复serviceImpl包路径问题
                 service_impl_package = f"{package_name}.service.impl.{package_suffix}"
             else:
@@ -299,6 +327,8 @@ class CodegenGenerator:
                 service_package = f"{package_name}.service"
                 entity_package = f"{package_name}.entity"
                 dao_package = f"{package_name}.dao"
+                dto_package = f"{package_name}.dto"
+                vo_package = f"{package_name}.vo"
                 # 修复serviceImpl包路径问题
                 service_impl_package = f"{package_name}.service.impl"
 
@@ -313,6 +343,8 @@ class CodegenGenerator:
                     "servicePackage": service_package,
                     "entityPackage": entity_package,
                     "daoPackage": dao_package,
+                    "dtoPackage": dto_package,
+                    "voPackage": vo_package,
                     # 添加serviceImpl包路径
                     "serviceImplPackage": service_impl_package,
                     "author": author,
@@ -389,6 +421,7 @@ class CodegenGenerator:
             relative_path = path_mapping[template_file]
             # 替换路径中的占位符
             file_path = relative_path.format(**context)
+            file_path = "/".join(part for part in file_path.split("/") if part)
 
             # 添加包路径结构
             package_name = context.get("package", "com.example")
