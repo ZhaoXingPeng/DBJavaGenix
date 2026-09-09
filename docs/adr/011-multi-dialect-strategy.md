@@ -137,13 +137,14 @@ postgresql:
 - 36 个 unit test 覆盖 mysql/postgres 两套映射,跨方言隔离测试防串
 - D3 用真实 PG container 验证 information_schema 上报的字符串确实命中
   我们的 key (这是配置驱动方案做不到的)
-- `template_context.py` 之后会渐进迁移到调用 `get_dialect(...).java_type_for()`,
-  本 ADR 不强制一次性切换
+- `template_context.py`、MCP `db_table_describe` 已统一调用
+  `get_dialect(...).java_type_for()`；未注册运行时方言仍保留旧 YAML 回退，避免把
+  SQL Server/Oracle 的配置映射误报为连接能力
 
 **坏**:
 - `dialect.py` 文件略大 (~300 行,主要是两张映射表),但都是数据
-- `template_context.py` 现在有重复的 MySQL 映射,**v0.3.1 计划重构** — 不在这个
-  ADR 范围内,先把 PG 跑起来,old code 保留向后兼容
+- MCP 描述工具对已注册方言不再维护独立的 Java 类型表；Java 类型对应 imports
+  也由 `DialectAdapter.java_imports_for()` 统一提供
 
 **实测**:
 - D3 PG 16 实测 23 个 PG 类型全部命中预期 Java 类型

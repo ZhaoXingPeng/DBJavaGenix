@@ -10,6 +10,48 @@ from ..core.java_identifiers import to_camel_case, to_pascal_case
 from ..database.dialect import DialectAdapter, get_dialect
 
 
+def apply_generation_options(
+    context: Dict[str, Any],
+    *,
+    generate_dto: Optional[bool] = None,
+    generate_vo: Optional[bool] = None,
+    include_dto_vo: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Normalize DTO/VO switches shared by legacy and atomic generation paths.
+
+    ``includeDtoVo`` and ``include_dto_vo`` are retained as compatibility
+    aliases for callers that historically enabled both artifacts together.
+    Explicit per-artifact switches take precedence over those aliases.
+    """
+    if include_dto_vo is None:
+        include_dto_vo = context.get("includeDtoVo", context.get("include_dto_vo"))
+
+    if include_dto_vo is not None:
+        if generate_dto is None:
+            generate_dto = include_dto_vo
+        if generate_vo is None:
+            generate_vo = include_dto_vo
+
+    if generate_dto is None:
+        generate_dto = context.get("generateDto", False)
+    if generate_vo is None:
+        generate_vo = context.get("generateVo", False)
+
+    dto_enabled = bool(generate_dto)
+    vo_enabled = bool(generate_vo)
+    context.update(
+        {
+            "generateDto": dto_enabled,
+            "generateVo": vo_enabled,
+            "hasDto": dto_enabled,
+            "hasVo": vo_enabled,
+            "includeDtoVo": dto_enabled or vo_enabled,
+            "include_dto_vo": dto_enabled or vo_enabled,
+        }
+    )
+    return context
+
+
 class TemplateContextBuilder:
     """模板上下文构建器"""
 
@@ -55,8 +97,10 @@ class TemplateContextBuilder:
         # 基础上下文 - 修复变量名映射
         class_name = self._to_pascal_case(table_info.name)
         entity_name_lower = self._to_camel_case(table_info.name)
-        primary_key_info = self._build_primary_key_context(table_info.columns)
-        columns_context = self._build_columns_context(table_info.columns)
+        primary_key_info = self._build_primary_key_context(
+            table_info.columns, table_info.primary_keys
+        )
+        columns_context = self._build_columns_context(table_info.columns, table_info.primary_keys)
 
         # 前缀分析 - 新增功能
         package_suffix = ""
@@ -126,15 +170,19 @@ class TemplateContextBuilder:
             # 列相关
             "columns": columns_context,
             "primaryKey": primary_key_info,
-            "nonPrimaryColumns": self._build_non_primary_columns_context(table_info.columns),
-            "otherColumns": self._build_non_primary_columns_context(table_info.columns),  # 别名
+            "nonPrimaryColumns": self._build_non_primary_columns_context(
+                table_info.columns, table_info.primary_keys
+            ),
+            "otherColumns": self._build_non_primary_columns_context(
+                table_info.columns, table_info.primary_keys
+            ),  # 别名
             # 主键相关 - 添加缺失的主键字段
             "primaryKeyName": primary_key_info["name"] if primary_key_info else "id",
             "primaryKeyType": primary_key_info["javaType"] if primary_key_info else "Long",
             "primaryKeyColumn": primary_key_info["dbName"]
             if primary_key_info
             else "id",  # 数据库列名
-            "capitalizedPrimaryKeyName": primary_key_info["javaName"].capitalize()
+            "capitalizedPrimaryKeyName": self._to_pascal_case(primary_key_info["javaName"])
             if primary_key_info
             else "Id",
             # 导入相关
@@ -222,25 +270,29 @@ class TemplateContextBuilder:
             tech_stack.is_modern_stack = True
             return tech_stack
 
-    def _build_columns_context(self, columns: List[ColumnInfo]) -> List[Dict[str, Any]]:
+    def _build_columns_context(
+        self, columns: List[ColumnInfo], primary_keys: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """构建列上下文"""
         column_contexts = []
+        primary_key_names = self._effective_primary_key_names(columns, primary_keys)
 
         for i, column in enumerate(columns):
             java_name = self._to_camel_case(column.name)
             java_type = self._map_java_type(column.data_type)
+            is_primary_key = column.name in primary_key_names
             column_context = {
                 # 基础字段信息
                 "name": column.name,  # 数据库字段名
                 "javaName": java_name,  # Java字段名
-                "capitalizedJavaName": java_name.capitalize(),  # 首字母大写的Java字段名
+                "capitalizedJavaName": self._to_pascal_case(java_name),  # 首字母大写的Java字段名
                 "dbName": column.name,
                 "javaType": java_type,
                 "jdbcType": self._map_jdbc_type(column.data_type),
                 "comment": column.comment or column.name,
                 # 字段属性
-                "isPrimaryKey": column.primary_key,
-                "primaryKey": column.primary_key,  # 兼容两种写法
+                "isPrimaryKey": is_primary_key,
+                "primaryKey": is_primary_key,  # 兼容两种写法
                 "isNullable": column.nullable,
                 "nullable": column.nullable,
                 "isAutoIncrement": column.auto_increment,
@@ -248,7 +300,7 @@ class TemplateContextBuilder:
                 "defaultValue": column.default_value,
                 "maxLength": column.max_length,
                 # 验证相关
-                "required": not column.nullable and not column.primary_key,
+                "required": not column.nullable and not is_primary_key,
                 "isString": self._is_string_type(column.data_type),
                 "stringType": self._is_string_type(column.data_type),  # 别名
                 "isStringType": self._is_string_type(column.data_type),  # 另一个别名
@@ -262,9 +314,18 @@ class TemplateContextBuilder:
 
         return column_contexts
 
-    def _build_primary_key_context(self, columns: List[ColumnInfo]) -> Optional[Dict[str, Any]]:
+    def _build_primary_key_context(
+        self, columns: List[ColumnInfo], primary_keys: Optional[List[str]] = None
+    ) -> Optional[Dict[str, Any]]:
         """构建主键上下文"""
-        pk_column = next((col for col in columns if col.primary_key), None)
+        primary_key_names = self._effective_primary_key_names(columns, primary_keys)
+        ordered_names = [str(name) for name in (primary_keys or []) if name]
+        pk_column = next(
+            (column for name in ordered_names for column in columns if column.name == name),
+            None,
+        )
+        if pk_column is None:
+            pk_column = next((col for col in columns if col.name in primary_key_names), None)
 
         if pk_column:
             java_name = self._to_camel_case(pk_column.name)
@@ -281,9 +342,12 @@ class TemplateContextBuilder:
 
         return None
 
-    def _build_non_primary_columns_context(self, columns: List[ColumnInfo]) -> List[Dict[str, Any]]:
+    def _build_non_primary_columns_context(
+        self, columns: List[ColumnInfo], primary_keys: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """构建非主键列上下文"""
-        non_pk_columns = [col for col in columns if not col.primary_key]
+        primary_key_names = self._effective_primary_key_names(columns, primary_keys)
+        non_pk_columns = [col for col in columns if col.name not in primary_key_names]
         column_contexts = []
 
         for i, column in enumerate(non_pk_columns):
@@ -293,14 +357,14 @@ class TemplateContextBuilder:
                 # 基础字段信息
                 "name": column.name,  # 数据库字段名
                 "javaName": java_name,  # Java字段名
-                "capitalizedJavaName": java_name.capitalize(),  # 首字母大写的Java字段名
+                "capitalizedJavaName": self._to_pascal_case(java_name),  # 首字母大写的Java字段名
                 "dbName": column.name,
                 "javaType": java_type,
                 "jdbcType": self._map_jdbc_type(column.data_type),
                 "comment": column.comment or column.name,
                 # 字段属性
-                "isPrimaryKey": column.primary_key,
-                "primaryKey": column.primary_key,  # 兼容两种写法
+                "isPrimaryKey": False,
+                "primaryKey": False,  # 兼容两种写法
                 "isNullable": column.nullable,
                 "nullable": column.nullable,
                 "isAutoIncrement": column.auto_increment,
@@ -308,7 +372,7 @@ class TemplateContextBuilder:
                 "defaultValue": column.default_value,
                 "maxLength": column.max_length,
                 # 验证相关
-                "required": not column.nullable and not column.primary_key,
+                "required": not column.nullable,
                 "isString": self._is_string_type(column.data_type),
                 "stringType": self._is_string_type(column.data_type),  # 别名
                 "isStringType": self._is_string_type(column.data_type),  # 另一个别名
@@ -322,6 +386,16 @@ class TemplateContextBuilder:
 
         return column_contexts
 
+    @staticmethod
+    def _effective_primary_key_names(
+        columns: List[ColumnInfo], primary_keys: Optional[List[str]] = None
+    ) -> set[str]:
+        """Resolve the authoritative primary-key names for template contexts."""
+        explicit_names = {str(name) for name in (primary_keys or []) if name}
+        if explicit_names and any(column.name in explicit_names for column in columns):
+            return explicit_names
+        return {column.name for column in columns if column.primary_key}
+
     def _build_custom_mappings(self, columns: List[ColumnInfo]) -> Dict[str, bool]:
         """构建自定义映射规则"""
         column_names = [self._to_camel_case(col.name) for col in columns]
@@ -334,25 +408,11 @@ class TemplateContextBuilder:
 
     def _build_imports(self, columns: List[ColumnInfo], template_category: str) -> List[str]:
         """构建导入列表"""
-        imports = []
-        java_types = {self._map_java_type(col.data_type) for col in columns}
-
-        # 时间类型导入
-        import_by_type = {
-            "LocalDateTime": "java.time.LocalDateTime",
-            "LocalDate": "java.time.LocalDate",
-            "LocalTime": "java.time.LocalTime",
-            "OffsetDateTime": "java.time.OffsetDateTime",
-            "OffsetTime": "java.time.OffsetTime",
-            "Instant": "java.time.Instant",
-            "BigDecimal": "java.math.BigDecimal",
-            "BigInteger": "java.math.BigInteger",
-            "UUID": "java.util.UUID",
+        imports = {
+            import_path
+            for column in columns
+            for import_path in self.dialect.java_imports_for(column.data_type)
         }
-        imports.extend(
-            import_by_type[java_type] for java_type in java_types if java_type in import_by_type
-        )
-
         return sorted(imports)
 
     def _has_date_field(self, columns: List[ColumnInfo]) -> bool:

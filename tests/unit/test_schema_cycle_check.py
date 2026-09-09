@@ -1,4 +1,5 @@
 """Unit tests for schema_cycle_check (DFS cycle detection)."""
+
 import pytest
 
 from dbjavagenix.algorithms.schema_cycle_check import CycleResult, find_cycles
@@ -28,9 +29,7 @@ class TestFindCycles:
 
     def test_3cycle(self):
         # a -> b -> c -> a
-        r = find_cycles(
-            ["a", "b", "c"], [("a", "b"), ("b", "c"), ("c", "a")]
-        )
+        r = find_cycles(["a", "b", "c"], [("a", "b"), ("b", "c"), ("c", "a")])
         assert not r.safe
         assert len(r.cycles) == 1
         assert set(r.cycles[0]) == {"a", "b", "c"}
@@ -42,9 +41,7 @@ class TestFindCycles:
 
     def test_chain_then_cycle(self):
         # x (alone) ; a -> b -> a
-        r = find_cycles(
-            ["x", "a", "b"], [("a", "b"), ("b", "a")]
-        )
+        r = find_cycles(["x", "a", "b"], [("a", "b"), ("b", "a")])
         assert not r.safe
         assert len(r.cycles) == 1
         assert set(r.cycles[0]) == {"a", "b"}
@@ -78,3 +75,14 @@ class TestFindCycles:
         assert r1.safe is True
         r2 = find_cycles(["a", "b"], [("a", "b"), ("b", "a")])
         assert r2.safe is False
+
+    def test_duplicate_tables_and_edges_are_normalized(self):
+        r = find_cycles(
+            ["a", "a", "b"],
+            [("a", "b"), ("b", "a"), ("a", "b"), ("", "a")],
+        )
+        assert r.cycles == [["a", "b"]]
+
+    def test_malformed_graph_values_are_ignored(self):
+        r = find_cycles(["a", "b"], "not-an-edge-list")
+        assert r.safe
