@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dbjavagenix.core.models import DatabaseType
+from dbjavagenix.core.models import ColumnInfo, DatabaseType
 from dbjavagenix.database.codegen_tools import CodegenAnalyzer, CodegenGenerator
 from dbjavagenix.database.atomic_codegen_tools import get_atomic_codegen_tools
 from dbjavagenix.database.mcp_tools import get_codegen_tools
@@ -67,6 +67,7 @@ class _BatchAnalyzer(CodegenAnalyzer):
     def __init__(self):
         super().__init__(connection_manager=object())
         self.introspector = _FakeIntrospector()
+        self.calls = []
 
     async def analyze_table_for_codegen(
         self,
@@ -77,6 +78,7 @@ class _BatchAnalyzer(CodegenAnalyzer):
         project_root=None,
         schema=None,
     ):
+        self.calls.append((connection_id, table_name, all_table_names, schema))
         if table_name == "broken":
             raise RuntimeError("metadata unavailable")
         return {"table_name": table_name, "template_context": {}}
@@ -84,7 +86,8 @@ class _BatchAnalyzer(CodegenAnalyzer):
 
 @pytest.mark.asyncio
 async def test_batch_analysis_keeps_success_and_error_accounting():
-    result = await _BatchAnalyzer().analyze_database_for_codegen("conn-1")
+    analyzer = _BatchAnalyzer()
+    result = await analyzer.analyze_database_for_codegen("conn-1")
 
     assert result["database_info"] == {
         "total_tables": 2,
@@ -94,6 +97,10 @@ async def test_batch_analysis_keeps_success_and_error_accounting():
     }
     assert result["tables"]["users"]["table_name"] == "users"
     assert result["tables"]["broken"]["error"] == "metadata unavailable"
+    assert analyzer.calls == [
+        ("conn-1", "users", ["broken", "users"], None),
+        ("conn-1", "broken", ["broken", "users"], None),
+    ]
 
 
 class _PostgresBatchAnalyzer(CodegenAnalyzer):
@@ -120,7 +127,7 @@ class _PostgresBatchAnalyzer(CodegenAnalyzer):
         project_root=None,
         schema=None,
     ):
-        self.calls.append((connection_id, table_name, schema))
+        self.calls.append((connection_id, table_name, all_table_names, schema))
         return {"table_name": table_name, "table_info": {"schema": schema}}
 
 
@@ -131,8 +138,8 @@ async def test_batch_analysis_keeps_postgresql_schema_identity():
     result = await analyzer.analyze_database_for_codegen("pg-1")
 
     assert analyzer.calls == [
-        ("pg-1", "users", "tenant_a"),
-        ("pg-1", "users", "tenant_b"),
+        ("pg-1", "users", ["users"], "tenant_a"),
+        ("pg-1", "users", ["users"], "tenant_b"),
     ]
     assert result["database_info"] == {
         "total_tables": 2,
@@ -196,6 +203,27 @@ def test_table_analysis_keeps_column_metadata_typed():
     assert column["auto_increment"] is True
     assert column["precision"] is None
     assert column["scale"] is None
+
+
+def test_imports_needed_match_dialect_aware_template_imports():
+    analyzer = CodegenAnalyzer(object())
+    columns = [
+        ColumnInfo(
+            name="occurred_at",
+            data_type="TIMESTAMPTZ",
+            java_type="OffsetDateTime",
+        ),
+        ColumnInfo(
+            name="amount",
+            data_type="DECIMAL(12,2)",
+            java_type="BigDecimal",
+        ),
+    ]
+
+    assert analyzer._calculate_imports_needed(columns, DatabaseType.POSTGRESQL) == [
+        "java.math.BigDecimal",
+        "java.time.OffsetDateTime",
+    ]
 
 
 def test_codegen_entrypoints_expose_optional_schema():

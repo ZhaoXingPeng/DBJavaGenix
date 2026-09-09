@@ -160,7 +160,7 @@ class TemplateContext:
                 for col in table.columns
             ],
             "primaryKeys": table.primary_keys,
-            "hasAutoIncrement": any(col.primary_key for col in table.columns),
+            "hasAutoIncrement": any(col.auto_increment for col in table.columns),
             "imports": TemplateContext._get_entity_imports(table, config),
         }
 
