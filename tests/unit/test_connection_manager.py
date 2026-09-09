@@ -153,6 +153,8 @@ class TestExecuteQuery:
         mgr, cid = manager_with_conn
         with pytest.raises(DatabaseQueryError):
             mgr.execute_query(cid, "INVALID SQL STATEMENT")
+        # A statement error must not evict an otherwise healthy connection.
+        assert cid in mgr.connections
 
     def test_empty_result_table(self, manager_with_conn):
         mgr, cid = manager_with_conn
