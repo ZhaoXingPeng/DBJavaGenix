@@ -78,6 +78,116 @@ def test_sqlite_introspection_returns_normalized_metadata():
         manager.close_connection(connection_id)
 
 
+def test_describe_table_reuses_connection_scoped_cache_and_returns_copies():
+    manager, connection_id = _sqlite_manager()
+    calls = []
+    original_execute = manager.execute_query
+
+    def counted_execute(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original_execute(*args, **kwargs)
+
+    manager.execute_query = counted_execute
+    introspector = DatabaseIntrospector(manager)
+    try:
+        first = introspector.describe_table(connection_id, "orders")
+        assert len(calls) == 7
+        assert manager.metadata_cache_size() == 1
+
+        first["columns"].clear()
+        second = introspector.describe_table(connection_id, "orders")
+
+        assert len(calls) == 7
+        assert second["columns"]
+        assert second is not first
+    finally:
+        manager.close_connection(connection_id)
+
+
+def test_metadata_cache_key_includes_schema():
+    manager, connection_id = _sqlite_manager()
+    calls = []
+    original_execute = manager.execute_query
+
+    def counted_execute(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original_execute(*args, **kwargs)
+
+    manager.execute_query = counted_execute
+    introspector = DatabaseIntrospector(manager)
+    try:
+        introspector.describe_table(connection_id, "orders")
+        introspector.describe_table(connection_id, "orders", "main")
+
+        assert len(calls) == 14
+        assert manager.metadata_cache_size() == 2
+    finally:
+        manager.close_connection(connection_id)
+
+
+def test_schema_change_invalidates_metadata_cache():
+    manager, connection_id = _sqlite_manager()
+    calls = []
+    original_execute = manager.execute_query
+
+    def counted_execute(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original_execute(*args, **kwargs)
+
+    manager.execute_query = counted_execute
+    introspector = DatabaseIntrospector(manager)
+    try:
+        introspector.describe_table(connection_id, "orders")
+        assert manager.metadata_cache_size() == 1
+
+        manager.execute_query(connection_id, "ALTER TABLE orders ADD COLUMN status TEXT")
+        assert manager.metadata_cache_size() == 0
+        refreshed = introspector.describe_table(connection_id, "orders")
+
+        assert [column["name"] for column in refreshed["columns"]][-1] == "status"
+        assert len(calls) == 15
+    finally:
+        manager.close_connection(connection_id)
+
+
+def test_commented_schema_change_invalidates_metadata_cache():
+    manager, connection_id = _sqlite_manager()
+    introspector = DatabaseIntrospector(manager)
+    try:
+        introspector.describe_table(connection_id, "orders")
+        assert manager.metadata_cache_size() == 1
+
+        manager.execute_query(
+            connection_id,
+            "/* migration */ ALTER TABLE orders ADD COLUMN archived INTEGER",
+        )
+
+        assert manager.metadata_cache_size() == 0
+    finally:
+        manager.close_connection(connection_id)
+
+
+def test_closing_connection_clears_metadata_cache():
+    manager, connection_id = _sqlite_manager()
+    DatabaseIntrospector(manager).describe_table(connection_id, "orders")
+
+    assert manager.metadata_cache_size() == 1
+    assert manager.close_connection(connection_id) is True
+    assert manager.metadata_cache_size() == 0
+
+
+def test_metadata_cache_does_not_store_failed_introspection():
+    manager, connection_id = _sqlite_manager()
+    introspector = DatabaseIntrospector(manager)
+    try:
+        with pytest.raises(DatabaseAnalysisError, match="not found"):
+            introspector.describe_table(connection_id, "missing_table")
+
+        assert manager.metadata_cache_size() == 0
+    finally:
+        manager.close_connection(connection_id)
+
+
 def test_sqlite_introspection_detects_autoincrement_primary_key():
     manager = ConnectionManager()
     connection_id = manager.create_connection(

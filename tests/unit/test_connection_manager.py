@@ -88,6 +88,32 @@ class TestCloseConnection:
         assert mgr.close_connection("nope") is False
 
 
+class TestMetadataCache:
+    def test_cache_returns_copies_and_evicts_oldest_entry(self):
+        mgr = ConnectionManager()
+        payload = {"columns": [{"name": "id"}]}
+
+        for index in range(257):
+            mgr.cache_metadata("connection", f"table_{index}", None, payload)
+
+        assert mgr.metadata_cache_size() == 256
+        assert mgr.get_cached_metadata("connection", "table_0") is None
+        cached = mgr.get_cached_metadata("connection", "table_1")
+        assert cached == payload
+        cached["columns"].clear()
+        assert mgr.get_cached_metadata("connection", "table_1") == payload
+
+    def test_invalidate_cache_is_connection_scoped(self):
+        mgr = ConnectionManager()
+        mgr.cache_metadata("connection-a", "users", None, {})
+        mgr.cache_metadata("connection-b", "users", None, {})
+
+        mgr.invalidate_metadata_cache("connection-a")
+
+        assert mgr.get_cached_metadata("connection-a", "users") is None
+        assert mgr.get_cached_metadata("connection-b", "users") == {}
+
+
 class TestListConnections:
     def test_lists_active(self, sqlite_config):
         mgr = ConnectionManager()

@@ -1,6 +1,10 @@
 """
 Database connection manager for DBJavaGenix MCP tools
 """
+from copy import deepcopy
+from collections import OrderedDict
+import re
+from threading import RLock
 import uuid
 from typing import Dict, List, Any, Optional
 import pymysql
@@ -15,6 +19,32 @@ from .capabilities import SUPPORTED_DATABASE_TYPES, supported_database_type_valu
 
 logger = logging.getLogger(__name__)
 
+_SCHEMA_CHANGE_PATTERN = re.compile(
+    r"^\s*(?:CREATE|ALTER|DROP|RENAME|TRUNCATE|COMMENT)\b", re.IGNORECASE
+)
+_METADATA_CACHE_MAX_ENTRIES = 256
+
+
+def _is_schema_change_query(query: object) -> bool:
+    """Detect schema-changing SQL after optional leading comments."""
+    if not isinstance(query, str):
+        return False
+    remaining = query.lstrip()
+    while remaining:
+        if remaining.startswith("--") or remaining.startswith("#"):
+            newline = remaining.find("\n")
+            if newline < 0:
+                return False
+            remaining = remaining[newline + 1 :].lstrip()
+        elif remaining.startswith("/*"):
+            end = remaining.find("*/", 2)
+            if end < 0:
+                return False
+            remaining = remaining[end + 2 :].lstrip()
+        else:
+            break
+    return bool(_SCHEMA_CHANGE_PATTERN.match(remaining))
+
 
 class ConnectionManager:
     """Manages database connections for MCP tools"""
@@ -22,6 +52,54 @@ class ConnectionManager:
     def __init__(self):
         self.connections: Dict[str, Any] = {}
         self.connection_configs: Dict[str, DatabaseConfig] = {}
+        self._metadata_cache: OrderedDict[
+            tuple[str, str, Optional[str]], Dict[str, Any]
+        ] = OrderedDict()
+        self._metadata_cache_lock = RLock()
+
+    def get_cached_metadata(
+        self, connection_id: str, table_name: str, schema: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Return a deep copy of one connection-scoped metadata entry, if present."""
+        key = (connection_id, table_name, schema)
+        with self._metadata_cache_lock:
+            cached = self._metadata_cache.get(key)
+            if cached is None:
+                return None
+            self._metadata_cache.move_to_end(key)
+            return deepcopy(cached)
+
+    def cache_metadata(
+        self,
+        connection_id: str,
+        table_name: str,
+        schema: Optional[str],
+        metadata: Dict[str, Any],
+    ) -> None:
+        """Store a complete metadata document without sharing mutable references."""
+        key = (connection_id, table_name, schema)
+        with self._metadata_cache_lock:
+            self._metadata_cache.pop(key, None)
+            self._metadata_cache[key] = deepcopy(metadata)
+            while len(self._metadata_cache) > _METADATA_CACHE_MAX_ENTRIES:
+                self._metadata_cache.popitem(last=False)
+
+    def invalidate_metadata_cache(self, connection_id: Optional[str] = None) -> None:
+        """Invalidate all metadata or only entries belonging to one connection."""
+        with self._metadata_cache_lock:
+            if connection_id is None:
+                self._metadata_cache.clear()
+                return
+            stale_keys = [
+                key for key in self._metadata_cache if key[0] == connection_id
+            ]
+            for key in stale_keys:
+                self._metadata_cache.pop(key, None)
+
+    def metadata_cache_size(self) -> int:
+        """Return the number of cached metadata documents for diagnostics/tests."""
+        with self._metadata_cache_lock:
+            return len(self._metadata_cache)
     
     def create_connection(self, config: DatabaseConfig) -> str:
         """
@@ -135,6 +213,7 @@ class ConnectionManager:
             True if connection was closed, False if not found
         """
         if connection_id not in self.connections:
+            self.invalidate_metadata_cache(connection_id)
             return False
         
         try:
@@ -142,6 +221,7 @@ class ConnectionManager:
             connection.close()
             self.connections.pop(connection_id, None)
             self.connection_configs.pop(connection_id, None)
+            self.invalidate_metadata_cache(connection_id)
             logger.info(f"Closed connection {connection_id}")
             return True
         except Exception as e:
@@ -149,6 +229,7 @@ class ConnectionManager:
             # Remove from dict anyway
             self.connections.pop(connection_id, None)
             self.connection_configs.pop(connection_id, None)
+            self.invalidate_metadata_cache(connection_id)
             return True
     
     def get_connection_info(self, connection_id: str) -> Optional[DatabaseConfig]:
@@ -216,6 +297,7 @@ class ConnectionManager:
         Raises:
             DatabaseQueryError: If query execution fails
         """
+        schema_change = _is_schema_change_query(query)
         try:
             with self.get_cursor(connection_id) as cursor:
                 cursor.execute(query, params or ())
@@ -233,11 +315,17 @@ class ConnectionManager:
                         else:  # MySQL
                             result.append(dict(zip(columns, row)))
                     
+                    if schema_change:
+                        self.invalidate_metadata_cache(connection_id)
                     return result
                 else:
+                    if schema_change:
+                        self.invalidate_metadata_cache(connection_id)
                     return []  # No results (e.g., INSERT/UPDATE/DELETE)
                     
         except Exception as e:
+            if schema_change:
+                self.invalidate_metadata_cache(connection_id)
             logger.error(f"Query execution failed: {e}")
             raise DatabaseQueryError(f"Failed to execute query: {str(e)}")
     
