@@ -5,12 +5,12 @@ LLM 在 progressive 模式下,通过此工具按需查询完整工具元数据�
 返回的工具名,LLM 仍可直接 call_tool — server 端不限制 (progressive 仅影响 list_tools)。
 """
 
-import json
 from typing import Any, Dict, List
 
 from mcp.types import TextContent, Tool
 
 from ..utils.tool_registry import is_progressive_mode_enabled, search_tools_by_query
+from ..utils.json_serialization import dumps as _json_dumps
 
 
 def get_discovery_tools() -> List[Tool]:
@@ -63,4 +63,4 @@ async def handle_search_tools(arguments: Dict[str, Any]) -> List[TextContent]:
             "无匹配工具。提示: 试试更宽泛的关键词,如 'connect' / 'table' / 'codegen' / 'spring'。"
         )
 
-    return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+    return [TextContent(type="text", text=_json_dumps(payload, indent=2))]

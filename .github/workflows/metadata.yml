@@ -1,0 +1,21 @@
+name: Repository metadata
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  issue-policy:
+    name: Issue title and body policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout validation script
+        uses: actions/checkout@v4
+
+      - name: Validate Issue metadata
+        env:
+          ISSUE_EVENT: ${{ github.event_path }}
+        run: python scripts/validate_commit_title.py --issue-event "$ISSUE_EVENT"

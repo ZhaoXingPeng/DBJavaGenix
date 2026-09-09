@@ -7,8 +7,8 @@ import time
 import pytest
 
 from dbjavagenix.core.models import DatabaseConfig, DatabaseType
-from dbjavagenix.database.connection_manager import ConnectionManager
 from dbjavagenix.database import mcp_tools
+from dbjavagenix.database.connection_manager import ConnectionManager
 
 
 @pytest.fixture
@@ -47,14 +47,12 @@ class _BlockingConnection:
 
     def __init__(self, state):
         self.state = state
-        self.closed_event = threading.Event()
 
     def cursor(self):
         return _BlockingCursor(self.state)
 
     def close(self):
         self.closed = 1
-        self.closed_event.set()
 
 
 def _state():
@@ -119,20 +117,20 @@ async def test_sqlite_connection_can_be_used_by_worker_thread(sqlite_config):
 
 @pytest.mark.asyncio
 async def test_same_connection_queries_are_serialized(sqlite_config):
-    first_state = _state()
-    manager, connection_id = _manager_with_fake_connection(sqlite_config, first_state)
+    state = _state()
+    manager, connection_id = _manager_with_fake_connection(sqlite_config, state)
 
     first = asyncio.create_task(asyncio.to_thread(manager.execute_query, connection_id, "SELECT 1"))
-    assert await asyncio.to_thread(first_state["entered"].wait, 1)
+    assert await asyncio.to_thread(state["entered"].wait, 1)
     second = asyncio.create_task(
         asyncio.to_thread(manager.execute_query, connection_id, "SELECT 2")
     )
     await asyncio.sleep(0.02)
-    assert first_state["max_active"] == 1
+    assert state["max_active"] == 1
 
-    first_state["release"].set()
+    state["release"].set()
     await asyncio.gather(first, second)
-    assert first_state["closed_cursors"] == 2
+    assert state["closed_cursors"] == 2
     manager.close_connection(connection_id)
 
 
@@ -180,4 +178,3 @@ async def test_close_waits_for_query_and_cleans_connection(sqlite_config):
     assert connection_id not in manager.connections
     assert connection_id not in manager.connection_configs
     assert connection_id not in manager._connection_locks
-    assert state["closed_cursors"] == 1

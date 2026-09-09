@@ -12,7 +12,6 @@ P4: AI 语义工具 - 用 Claude API + 规则推断增强代码生成。
   - 所有响应附带 metrics (源/token 使用),便于 P4.4 监控
 """
 
-import json
 import logging
 from typing import Any, Dict, List
 
@@ -31,6 +30,7 @@ from ..ai.naming_rules import (
 )
 from ..ai.schema_summary import summarize_schema
 from ..ai.template_recommender import recommend_template
+from ..utils.json_serialization import dumps as _json_dumps
 
 logger = logging.getLogger(__name__)
 
@@ -173,10 +173,12 @@ async def handle_ai_infer_business_names(arguments: Dict[str, Any]) -> List[Text
     model = arguments.get("model", "claude-sonnet-4-6")
 
     if not tables:
-        return [TextContent(
-            type="text",
-            text=json.dumps({"error": "tables is required and non-empty"}, ensure_ascii=False),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=_json_dumps({"error": "tables is required and non-empty"}),
+            )
+        ]
 
     inferences_out: List[Dict[str, Any]] = []
     source_used = "rule"
@@ -213,10 +215,12 @@ async def handle_ai_infer_business_names(arguments: Dict[str, Any]) -> List[Text
         "llm_metrics": llm_metrics,
         "llm_available": is_llm_available(),
     }
-    return [TextContent(
-        type="text",
-        text=json.dumps(response, ensure_ascii=False, indent=2),
-    )]
+    return [
+        TextContent(
+            type="text",
+            text=_json_dumps(response, indent=2),
+        )
+    ]
 
 
 def _rule_to_dict(ri: NamingInference) -> Dict[str, Any]:
@@ -242,16 +246,16 @@ def _metrics_to_dict(m: LLMMetrics) -> Dict[str, Any]:
     }
 
 
-def _merge_inference(
-    llm_item: Dict[str, Any], rule_fallback: NamingInference
-) -> Dict[str, Any]:
+def _merge_inference(llm_item: Dict[str, Any], rule_fallback: NamingInference) -> Dict[str, Any]:
     """LLM 输出补全缺失字段 (从规则推断里取)"""
     merged: Dict[str, Any] = {
         "table": llm_item.get("table", ""),
-        "class_name": llm_item.get("class_name") or (rule_fallback.class_name if rule_fallback else ""),
+        "class_name": llm_item.get("class_name")
+        or (rule_fallback.class_name if rule_fallback else ""),
         "field_naming": llm_item.get("field_naming") or {},
         "reason": llm_item.get("reason") or (rule_fallback.reason if rule_fallback else ""),
-        "table_kind": llm_item.get("table_kind") or (rule_fallback.table_kind if rule_fallback else "unknown"),
+        "table_kind": llm_item.get("table_kind")
+        or (rule_fallback.table_kind if rule_fallback else "unknown"),
         "source": "llm",
         "confidence": 0.9,
     }
@@ -262,6 +266,7 @@ def _merge_inference(
 # P4.2 / P4.3 handlers
 # ============================================================
 
+
 async def handle_ai_recommend_template(arguments: Dict[str, Any]) -> List[TextContent]:
     """根据整库 schema 推荐模板分类 + 生成选项"""
     table_names = arguments.get("table_names", [])
@@ -269,10 +274,12 @@ async def handle_ai_recommend_template(arguments: Dict[str, Any]) -> List[TextCo
     hint_modern = bool(arguments.get("hint_modern_stack", False))
 
     if not table_names:
-        return [TextContent(
-            type="text",
-            text=json.dumps({"error": "table_names is required and non-empty"}, ensure_ascii=False),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=_json_dumps({"error": "table_names is required and non-empty"}),
+            )
+        ]
 
     rec = recommend_template(
         table_names=table_names,
@@ -288,10 +295,12 @@ async def handle_ai_recommend_template(arguments: Dict[str, Any]) -> List[TextCo
         "reasons": rec.reasons,
         "matched_tables": rec.matched_tables,
     }
-    return [TextContent(
-        type="text",
-        text=json.dumps(response, ensure_ascii=False, indent=2),
-    )]
+    return [
+        TextContent(
+            type="text",
+            text=_json_dumps(response, indent=2),
+        )
+    ]
 
 
 async def handle_ai_summarize_schema(arguments: Dict[str, Any]) -> List[TextContent]:
@@ -301,10 +310,12 @@ async def handle_ai_summarize_schema(arguments: Dict[str, Any]) -> List[TextCont
     table_column_counts = arguments.get("table_column_counts", {})
 
     if not table_names:
-        return [TextContent(
-            type="text",
-            text=json.dumps({"error": "table_names is required and non-empty"}, ensure_ascii=False),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=_json_dumps({"error": "table_names is required and non-empty"}),
+            )
+        ]
 
     summary = summarize_schema(
         table_names=table_names,
@@ -321,10 +332,12 @@ async def handle_ai_summarize_schema(arguments: Dict[str, Any]) -> List[TextCont
         "core_entities": summary.core_entities,
         "relationships": summary.relationships,
     }
-    return [TextContent(
-        type="text",
-        text=json.dumps(response, ensure_ascii=False, indent=2),
-    )]
+    return [
+        TextContent(
+            type="text",
+            text=_json_dumps(response, indent=2),
+        )
+    ]
 
 
 async def handle_ai_metrics(arguments: Dict[str, Any]) -> List[TextContent]:
@@ -346,7 +359,9 @@ async def handle_ai_metrics(arguments: Dict[str, Any]) -> List[TextContent]:
         GLOBAL_LLM_STATS.total_cache_creation = 0
         GLOBAL_LLM_STATS.total_errors = 0
         response["reset"] = True
-    return [TextContent(
-        type="text",
-        text=json.dumps(response, ensure_ascii=False, indent=2),
-    )]
+    return [
+        TextContent(
+            type="text",
+            text=_json_dumps(response, indent=2),
+        )
+    ]

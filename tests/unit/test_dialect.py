@@ -104,6 +104,10 @@ class TestMySQLDialect:
         assert self.d.is_decimal_type("DECIMAL")
         assert not self.d.is_decimal_type("INT")
 
+    def test_java_imports_follow_mapped_type(self):
+        assert self.d.java_imports_for("DATETIME") == ["java.time.LocalDateTime"]
+        assert self.d.java_imports_for("INT") == []
+
 
 class TestPostgreSQLDialect:
     def setup_method(self):
@@ -172,6 +176,10 @@ class TestPostgreSQLDialect:
 
     def test_unknown_falls_back_to_string(self):
         assert self.d.java_type_for("WEIRD_PG_TYPE") == "String"
+
+    def test_java_imports_follow_mapped_type(self):
+        assert self.d.java_imports_for("TIMESTAMPTZ") == ["java.time.OffsetDateTime"]
+        assert self.d.java_imports_for("UUID") == []
 
 
 class TestSQLiteDialect:

@@ -1,0 +1,67 @@
+package {{voPackage}};
+
+{{#imports}}
+import {{.}};
+{{/imports}}
+import java.io.Serializable;
+{{#useLombok}}
+import lombok.Data;
+{{/useLombok}}
+{{#useSwagger}}
+{{#hasSpringDoc}}
+import io.swagger.v3.oas.annotations.media.Schema;
+{{/hasSpringDoc}}
+{{#hasSwagger2}}
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+{{/hasSwagger2}}
+{{/useSwagger}}
+
+/**
+ * {{comment}}({{tableName}}) view object.
+ *
+ * @author {{author}}
+ * @date {{date}}
+ */
+{{#useLombok}}
+@Data
+{{/useLombok}}
+{{#useSwagger}}
+{{#hasSpringDoc}}
+@Schema(description = "{{comment}}VO")
+{{/hasSpringDoc}}
+{{#hasSwagger2}}
+@ApiModel(description = "{{comment}}VO")
+{{/hasSwagger2}}
+{{/useSwagger}}
+public class {{className}}VO implements Serializable {
+    private static final long serialVersionUID = {{serialVersionUID}}L;
+
+{{#columns}}
+    /**
+     * {{comment}}
+     */
+    {{#useSwagger}}
+    {{#hasSpringDoc}}
+    @Schema(description = "{{comment}}")
+    {{/hasSpringDoc}}
+    {{#hasSwagger2}}
+    @ApiModelProperty(value = "{{comment}}")
+    {{/hasSwagger2}}
+    {{/useSwagger}}
+    private {{javaType}} {{javaName}};
+
+{{/columns}}
+{{^useLombok}}
+{{#columns}}
+    public {{javaType}} get{{capitalizedJavaName}}() {
+        return {{javaName}};
+    }
+
+    public void set{{capitalizedJavaName}}({{javaType}} {{javaName}}) {
+        this.{{javaName}} = {{javaName}};
+    }
+
+{{/columns}}
+{{/useLombok}}
+}

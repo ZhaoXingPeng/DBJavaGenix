@@ -280,13 +280,22 @@ postgresql:
     TIME: 
       java_type: "LocalTime"
       imports: ["java.time.LocalTime"]
+    TIME_WITHOUT_TIME_ZONE:
+      java_type: "LocalTime"
+      imports: ["java.time.LocalTime"]
     TIME_WITH_TIME_ZONE: 
       java_type: "OffsetTime"
       imports: ["java.time.OffsetTime"]
     TIMESTAMP: 
       java_type: "LocalDateTime"
       imports: ["java.time.LocalDateTime"]
+    TIMESTAMP_WITHOUT_TIME_ZONE:
+      java_type: "LocalDateTime"
+      imports: ["java.time.LocalDateTime"]
     TIMESTAMP_WITH_TIME_ZONE: 
+      java_type: "OffsetDateTime"
+      imports: ["java.time.OffsetDateTime"]
+    TIMESTAMPTZ:
       java_type: "OffsetDateTime"
       imports: ["java.time.OffsetDateTime"]
     INTERVAL: 

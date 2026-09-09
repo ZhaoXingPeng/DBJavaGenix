@@ -1,10 +1,6 @@
 """
 Database connection manager for DBJavaGenix MCP tools
 """
-from copy import deepcopy
-from collections import OrderedDict
-import re
-from threading import RLock
 import uuid
 import threading
 from typing import Dict, List, Any, Optional
@@ -20,32 +16,6 @@ from .capabilities import SUPPORTED_DATABASE_TYPES, supported_database_type_valu
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_CHANGE_PATTERN = re.compile(
-    r"^\s*(?:CREATE|ALTER|DROP|RENAME|TRUNCATE|COMMENT)\b", re.IGNORECASE
-)
-_METADATA_CACHE_MAX_ENTRIES = 256
-
-
-def _is_schema_change_query(query: object) -> bool:
-    """Detect schema-changing SQL after optional leading comments."""
-    if not isinstance(query, str):
-        return False
-    remaining = query.lstrip()
-    while remaining:
-        if remaining.startswith("--") or remaining.startswith("#"):
-            newline = remaining.find("\n")
-            if newline < 0:
-                return False
-            remaining = remaining[newline + 1 :].lstrip()
-        elif remaining.startswith("/*"):
-            end = remaining.find("*/", 2)
-            if end < 0:
-                return False
-            remaining = remaining[end + 2 :].lstrip()
-        else:
-            break
-    return bool(_SCHEMA_CHANGE_PATTERN.match(remaining))
-
 
 class ConnectionManager:
     """Manages database connections for MCP tools"""
@@ -55,54 +25,6 @@ class ConnectionManager:
         self.connection_configs: Dict[str, DatabaseConfig] = {}
         self._registry_lock = threading.RLock()
         self._connection_locks: Dict[str, Any] = {}
-        self._metadata_cache: OrderedDict[
-            tuple[str, str, Optional[str]], Dict[str, Any]
-        ] = OrderedDict()
-        self._metadata_cache_lock = RLock()
-
-    def get_cached_metadata(
-        self, connection_id: str, table_name: str, schema: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Return a deep copy of one connection-scoped metadata entry, if present."""
-        key = (connection_id, table_name, schema)
-        with self._metadata_cache_lock:
-            cached = self._metadata_cache.get(key)
-            if cached is None:
-                return None
-            self._metadata_cache.move_to_end(key)
-            return deepcopy(cached)
-
-    def cache_metadata(
-        self,
-        connection_id: str,
-        table_name: str,
-        schema: Optional[str],
-        metadata: Dict[str, Any],
-    ) -> None:
-        """Store a complete metadata document without sharing mutable references."""
-        key = (connection_id, table_name, schema)
-        with self._metadata_cache_lock:
-            self._metadata_cache.pop(key, None)
-            self._metadata_cache[key] = deepcopy(metadata)
-            while len(self._metadata_cache) > _METADATA_CACHE_MAX_ENTRIES:
-                self._metadata_cache.popitem(last=False)
-
-    def invalidate_metadata_cache(self, connection_id: Optional[str] = None) -> None:
-        """Invalidate all metadata or only entries belonging to one connection."""
-        with self._metadata_cache_lock:
-            if connection_id is None:
-                self._metadata_cache.clear()
-                return
-            stale_keys = [
-                key for key in self._metadata_cache if key[0] == connection_id
-            ]
-            for key in stale_keys:
-                self._metadata_cache.pop(key, None)
-
-    def metadata_cache_size(self) -> int:
-        """Return the number of cached metadata documents for diagnostics/tests."""
-        with self._metadata_cache_lock:
-            return len(self._metadata_cache)
     
     def create_connection(self, config: DatabaseConfig) -> str:
         """
@@ -155,14 +77,12 @@ class ConnectionManager:
                 )
                 connection.autocommit = True
             elif config.type == DatabaseType.SQLITE:
-                # MCP database work runs in worker threads. SQLite's default
-                # thread affinity would reject a connection created elsewhere.
+                # MCP handlers may execute this connection in a worker thread.
                 connection = sqlite3.connect(config.database, check_same_thread=False)
                 connection.row_factory = sqlite3.Row  # Enable dict-like access
             else:
                 raise DatabaseConnectionError(f"Unsupported database type: {config.type}")
             
-            # Store the connection and its lock atomically with the registry.
             with self._registry_lock:
                 self.connections[connection_id] = connection
                 self._connection_locks[connection_id] = threading.RLock()
@@ -192,8 +112,13 @@ class ConnectionManager:
         Raises:
             DatabaseConnectionError: If connection not found
         """
-        with self._connection_lock(connection_id):
-            connection = self._get_connection_unlocked(connection_id)
+        lock = self._connection_lock_for(connection_id)
+        with lock:
+            with self._registry_lock:
+                connection = self.connections.get(connection_id)
+            if connection is None:
+                raise DatabaseConnectionError(f"Connection {connection_id} not found")
+
             try:
                 if getattr(connection, "closed", 0):
                     raise DatabaseConnectionError("connection is closed")
@@ -201,45 +126,33 @@ class ConnectionManager:
                     connection.ping(reconnect=True)
             except Exception as exc:
                 logger.warning("Connection %s is dead, removing: %s", connection_id, exc)
-                self._close_connection_unlocked(connection_id, connection)
+                self._remove_connection(connection_id, connection)
                 raise DatabaseConnectionError(
                     f"Connection {connection_id} is no longer valid"
                 ) from exc
             return connection
 
-    @contextmanager
-    def _connection_lock(self, connection_id: str):
-        """Serialize operations for one connection without blocking the registry."""
+    def _connection_lock_for(self, connection_id: str) -> Any:
+        """Return a per-connection lock, including for legacy test doubles."""
         with self._registry_lock:
-            lock = self._connection_locks.get(connection_id)
-            if lock is None or connection_id not in self.connections:
+            if connection_id not in self.connections:
                 raise DatabaseConnectionError(f"Connection {connection_id} not found")
-        with lock:
-            yield
+            # A few integrations inject a connection directly into the public
+            # mapping. Lazily creating the lock preserves that compatibility.
+            return self._connection_locks.setdefault(connection_id, threading.RLock())
 
-    def _get_connection_unlocked(self, connection_id: str) -> Any:
-        with self._registry_lock:
-            connection = self.connections.get(connection_id)
-        if connection is None:
-            raise DatabaseConnectionError(f"Connection {connection_id} not found")
-        return connection
-
-    def _close_connection_unlocked(self, connection_id: str, connection: Any) -> bool:
+    def _remove_connection(self, connection_id: str, connection: Any) -> None:
         """Close and remove a connection while its per-connection lock is held."""
         try:
             connection.close()
-            closed = True
         except Exception as exc:
             logger.error("Error closing connection %s: %s", connection_id, exc)
-            closed = True
         finally:
             with self._registry_lock:
                 self.connections.pop(connection_id, None)
                 self.connection_configs.pop(connection_id, None)
                 self._connection_locks.pop(connection_id, None)
-            self.invalidate_metadata_cache(connection_id)
         logger.info("Closed connection %s", connection_id)
-        return closed
     
     def close_connection(self, connection_id: str) -> bool:
         """
@@ -253,17 +166,16 @@ class ConnectionManager:
         """
         with self._registry_lock:
             if connection_id not in self.connections:
-                self.invalidate_metadata_cache(connection_id)
                 return False
             lock = self._connection_locks.setdefault(connection_id, threading.RLock())
+
         with lock:
-            # A preceding close may have removed the connection while this
-            # caller was waiting for the per-connection lock.
             with self._registry_lock:
-                current = self.connections.get(connection_id)
-            if current is None:
+                connection = self.connections.get(connection_id)
+            if connection is None:
                 return False
-            return self._close_connection_unlocked(connection_id, current)
+            self._remove_connection(connection_id, connection)
+            return True
     
     def get_connection_info(self, connection_id: str) -> Optional[DatabaseConfig]:
         """
@@ -312,8 +224,12 @@ class ConnectionManager:
         Yields:
             Database cursor
         """
-        with self._connection_lock(connection_id):
-            connection = self._get_connection_unlocked(connection_id)
+        lock = self._connection_lock_for(connection_id)
+        with lock:
+            with self._registry_lock:
+                connection = self.connections.get(connection_id)
+            if connection is None:
+                raise DatabaseConnectionError(f"Connection {connection_id} not found")
             try:
                 if getattr(connection, "closed", 0):
                     raise DatabaseConnectionError("connection is closed")
@@ -321,21 +237,18 @@ class ConnectionManager:
                     connection.ping(reconnect=True)
             except Exception as exc:
                 logger.warning("Connection %s is dead, removing: %s", connection_id, exc)
-                self._close_connection_unlocked(connection_id, connection)
+                self._remove_connection(connection_id, connection)
                 raise DatabaseConnectionError(
                     f"Connection {connection_id} is no longer valid"
                 ) from exc
             try:
                 cursor = connection.cursor()
             except Exception as exc:
-                logger.warning("Connection %s could not create a cursor: %s", connection_id, exc)
-                self._close_connection_unlocked(connection_id, connection)
+                self._remove_connection(connection_id, connection)
                 raise DatabaseConnectionError(
                     f"Connection {connection_id} is no longer valid"
                 ) from exc
             try:
-                # Exceptions from the caller's SQL body must propagate without
-                # evicting a healthy connection from the registry.
                 yield cursor
             finally:
                 cursor.close()
@@ -355,8 +268,11 @@ class ConnectionManager:
         Raises:
             DatabaseQueryError: If query execution fails
         """
-        schema_change = _is_schema_change_query(query)
+        connection = None
         try:
+            # SQLite defaults to an implicit transaction.  Keep its writes
+            # durable at this boundary without changing the caller's SQL API.
+            connection = self.get_connection(connection_id)
             with self.get_cursor(connection_id) as cursor:
                 cursor.execute(query, params or ())
                 
@@ -373,23 +289,30 @@ class ConnectionManager:
                         else:  # MySQL
                             result.append(dict(zip(columns, row)))
                     
-                    if schema_change:
-                        self.invalidate_metadata_cache(connection_id)
-                    return result
                 else:
-                    if schema_change:
-                        self.invalidate_metadata_cache(connection_id)
-                    return []  # No results (e.g., INSERT/UPDATE/DELETE)
+                    result = []  # No results (e.g., INSERT/UPDATE/DELETE)
+
+                if isinstance(connection, sqlite3.Connection):
+                    connection.commit()
+                return result
                     
         except Exception as e:
-            if schema_change:
-                self.invalidate_metadata_cache(connection_id)
+            if isinstance(connection, sqlite3.Connection):
+                try:
+                    connection.rollback()
+                except Exception as rollback_error:
+                    logger.warning("SQLite rollback failed after query error: %s", rollback_error)
             logger.error(f"Query execution failed: {e}")
             raise DatabaseQueryError(f"Failed to execute query: {str(e)}")
     
     def __del__(self):
         """Clean up connections on destruction"""
-        for connection_id in list(self.connections.keys()):
+        try:
+            with self._registry_lock:
+                connection_ids = list(self.connections.keys())
+        except Exception:
+            connection_ids = []
+        for connection_id in connection_ids:
             try:
                 self.close_connection(connection_id)
             except Exception:

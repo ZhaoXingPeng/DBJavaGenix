@@ -57,13 +57,15 @@ def build_code_diff_data(
         after = entry.get("code", "")
         before = _try_read_existing(root, file_path) if root else None
 
-        diff_files.append({
-            "file_path": file_path,
-            "template_file": entry.get("template_file"),
-            "before": before,
-            "after": after,
-            "lines": entry.get("lines"),
-        })
+        diff_files.append(
+            {
+                "file_path": file_path,
+                "template_file": entry.get("template_file"),
+                "before": before,
+                "after": after,
+                "lines": entry.get("lines"),
+            }
+        )
 
     return {
         "language": language,
@@ -76,9 +78,11 @@ def _try_read_existing(root: Path, relative_path: str) -> Optional[str]:
     if not relative_path:
         return None
     try:
-        target = root / relative_path
+        resolved_root = root.resolve()
+        target = (resolved_root / relative_path).resolve()
+        target.relative_to(resolved_root)
         if not target.exists() or not target.is_file():
             return None
         return target.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, RuntimeError, ValueError, UnicodeDecodeError):
         return None
