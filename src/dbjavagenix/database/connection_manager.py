@@ -28,6 +28,7 @@ class ConnectionManager:
         self.connection_configs: Dict[str, DatabaseConfig] = {}
         self._registry_lock = threading.RLock()
         self._connection_locks: Dict[str, Any] = {}
+        # Metadata is scoped by connection and schema so DDL cannot leak across sessions.
         self._metadata_cache: OrderedDict[tuple[str, str, str | None], Dict[str, Any]] = OrderedDict()
         self._metadata_cache_limit = 256
 
