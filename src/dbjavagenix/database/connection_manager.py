@@ -3,10 +3,13 @@ Database connection manager for DBJavaGenix MCP tools
 """
 import uuid
 import threading
+from collections import OrderedDict
+from copy import deepcopy
 from typing import Dict, List, Any, Optional
 import pymysql
 import sqlite3
 import logging
+import re
 from contextlib import contextmanager
 
 from ..core.models import DatabaseConfig, DatabaseType
@@ -25,6 +28,42 @@ class ConnectionManager:
         self.connection_configs: Dict[str, DatabaseConfig] = {}
         self._registry_lock = threading.RLock()
         self._connection_locks: Dict[str, Any] = {}
+        # Metadata is scoped by connection and schema so DDL cannot leak across sessions.
+        self._metadata_cache: OrderedDict[tuple[str, str, str | None], Dict[str, Any]] = OrderedDict()
+        self._metadata_cache_limit = 256
+
+    def cache_metadata(
+        self, connection_id: str, table_name: str, schema: str | None, metadata: Dict[str, Any]
+    ) -> None:
+        """Store a defensive copy of table metadata in the bounded LRU cache."""
+        key = (connection_id, table_name, schema)
+        with self._registry_lock:
+            self._metadata_cache[key] = deepcopy(metadata)
+            self._metadata_cache.move_to_end(key)
+            while len(self._metadata_cache) > self._metadata_cache_limit:
+                self._metadata_cache.popitem(last=False)
+
+    def get_cached_metadata(
+        self, connection_id: str, table_name: str, schema: str | None = None
+    ) -> Dict[str, Any] | None:
+        """Return a defensive copy of cached metadata, if present."""
+        key = (connection_id, table_name, schema)
+        with self._registry_lock:
+            metadata = self._metadata_cache.get(key)
+            if metadata is None:
+                return None
+            self._metadata_cache.move_to_end(key)
+            return deepcopy(metadata)
+
+    def metadata_cache_size(self) -> int:
+        with self._registry_lock:
+            return len(self._metadata_cache)
+
+    def invalidate_metadata_cache(self, connection_id: str) -> None:
+        """Invalidate all table metadata associated with one connection."""
+        with self._registry_lock:
+            for key in [key for key in self._metadata_cache if key[0] == connection_id]:
+                self._metadata_cache.pop(key, None)
     
     def create_connection(self, config: DatabaseConfig) -> str:
         """
@@ -152,6 +191,7 @@ class ConnectionManager:
                 self.connections.pop(connection_id, None)
                 self.connection_configs.pop(connection_id, None)
                 self._connection_locks.pop(connection_id, None)
+                self.invalidate_metadata_cache(connection_id)
         logger.info("Closed connection %s", connection_id)
     
     def close_connection(self, connection_id: str) -> bool:
@@ -294,6 +334,14 @@ class ConnectionManager:
 
                 if isinstance(connection, sqlite3.Connection):
                     connection.commit()
+                statement = re.sub(
+                    r"^\s*(?:(?:/\*.*?\*/)|(?:--[^\n]*(?:\n|$)))\s*",
+                    "",
+                    query,
+                    flags=re.DOTALL,
+                ).upper()
+                if re.match(r"(?:ALTER|CREATE|DROP|RENAME|TRUNCATE)\b", statement):
+                    self.invalidate_metadata_cache(connection_id)
                 return result
                     
         except Exception as e:
