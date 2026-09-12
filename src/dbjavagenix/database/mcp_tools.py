@@ -179,6 +179,19 @@ def _tokenize_read_only_sql(query: str) -> List[tuple[str, str]]:
             tokens.append(("quoted", query[start:index]))
             continue
 
+        if char == "$":
+            dollar_match = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$", query[index:])
+            if dollar_match:
+                delimiter = dollar_match.group(0)
+                start = index
+                content_start = index + len(delimiter)
+                end = query.find(delimiter, content_start)
+                if end < 0:
+                    raise MCPServiceError("Unterminated dollar-quoted literal")
+                index = end + len(delimiter)
+                tokens.append(("quoted", query[start:index]))
+                continue
+
         if char.isalpha() or char == "_":
             start = index
             index += 1
@@ -236,6 +249,13 @@ def _validate_read_only_query(query: Any) -> str:
     if _contains_locking_read_clause(tokens):
         raise MCPServiceError("Only non-locking read-only SELECT queries are allowed")
 
+    for index, token in enumerate(tokens):
+        if token != ("word", "FETCH"):
+            continue
+        fetch_tail = [value for kind, value in tokens[index + 1 : index + 10] if kind == "word"]
+        if "WITH" in fetch_tail and "TIES" in fetch_tail[fetch_tail.index("WITH") + 1 :]:
+            raise MCPServiceError("FETCH WITH TIES is not supported for bounded read-only queries")
+
     depth = 0
     top_level_select = first_word == "SELECT"
     for kind, value in tokens:
@@ -276,6 +296,11 @@ def _has_top_level_limit_clause(query: str) -> bool:
             next_token = tokens[index + 1] if index + 1 < len(tokens) else None
             if next_token and (next_token[0] == "symbol" or next_token[1] == "ALL"):
                 return True
+        elif kind == "word" and value == "FETCH" and depth == 0:
+            words = [token[1] for token in tokens[index : index + 5] if token[0] == "word"]
+            if len(words) >= 4 and words[:2] == ["FETCH", words[1]] and words[1] in {"FIRST", "NEXT"}:
+                if words[-1] == "ONLY" or (len(words) >= 5 and words[-1] == "ROWS"):
+                    return True
     return False
 
 
@@ -289,6 +314,17 @@ def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
     masked = list(query)
     index = 0
     while index < len(masked):
+        if masked[index] == "$":
+            dollar_match = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$", query[index:])
+            if dollar_match:
+                delimiter = dollar_match.group(0)
+                end = query.find(delimiter, index + len(delimiter))
+                if end < 0:
+                    raise MCPServiceError("Unterminated dollar-quoted literal")
+                for position in range(index, end + len(delimiter)):
+                    masked[position] = " "
+                index = end + len(delimiter)
+                continue
         if masked[index] not in "'\"`":
             index += 1
             continue
@@ -330,6 +366,13 @@ def _top_level_limit_span(query: str) -> tuple[int, int, int | None] | None:
         if is_top_level(match.start()):
             value = match.group(1).upper()
             return match.start(1), match.end(1), None if value == "ALL" else int(value)
+
+    fetch_form = re.compile(
+        r"\bFETCH\s+(FIRST|NEXT)\s+(\d+)\s+ROWS?\s+ONLY\b", re.IGNORECASE
+    )
+    for match in fetch_form.finditer(masked_query):
+        if is_top_level(match.start()):
+            return match.start(2), match.end(2), int(match.group(2))
     return None
 
 
